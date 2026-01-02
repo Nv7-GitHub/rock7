@@ -31,6 +31,44 @@ class Mpu6x00 {
 
   } accelFsr_e;
 
+  typedef enum {
+
+    DLPF_260HZ,  // 260 Hz bandwidth, no filtering (DLPF disabled)
+    DLPF_184HZ,  // 184 Hz bandwidth
+    DLPF_92HZ,   // 92 Hz bandwidth
+    DLPF_41HZ,   // 41 Hz bandwidth (good balance)
+    DLPF_20HZ,   // 20 Hz bandwidth (smooth)
+    DLPF_10HZ,   // 10 Hz bandwidth (very smooth)
+    DLPF_5HZ     // 5 Hz bandwidth (extremely smooth)
+
+  } dlpf_e;
+
+  /**
+   * Set the Output Data Rate (ODR) in Hz.
+   * Valid rates: 1000, 500, 250, 200, 125, 100, 50, 25, 10, 5, 4 Hz
+   * Note: ODR only works when DLPF is enabled (DLPF_CFG >= 1)
+   * If DLPF is disabled, sensor runs at 8 kHz
+   */
+  void setODR(uint16_t odr_hz) {
+    // ODR = 1000 / (1 + SMPLRT_DIV)
+    // SMPLRT_DIV = (1000 / ODR) - 1
+    if (odr_hz == 0 || odr_hz > 1000) {
+      odr_hz = 1000;  // Clamp to valid range
+    }
+    uint8_t div = (1000 / odr_hz) - 1;
+    writeRegister(REG_SMPLRT_DIV, div);
+    delayMicroseconds(15);
+  }
+
+  /**
+   * Set the Digital Low Pass Filter (DLPF) configuration.
+   */
+  void setDLPF(dlpf_e dlpf) {
+    m_dlpf = dlpf;
+    writeRegister(REG_CONFIG, (uint8_t)dlpf);
+    delayMicroseconds(15);
+  }
+
   /**
    * Returns true on success, false on failure.
    */
@@ -70,7 +108,7 @@ class Mpu6x00 {
     writeRegister(REG_INT_ENABLE, BIT_RAW_RDY_EN);
     delayMicroseconds(15);
 
-    writeRegister(REG_CONFIG, 0);
+    writeRegister(REG_CONFIG, (uint8_t)m_dlpf);
     delayMicroseconds(1);
 
     return true;
@@ -158,6 +196,7 @@ class Mpu6x00 {
 
   gyroFsr_e m_gyroFsr;
   accelFsr_e m_accelFsr;
+  dlpf_e m_dlpf;
 
   float m_gyroScale;
   float m_accelScale;
@@ -172,6 +211,7 @@ class Mpu6x00 {
 
     m_gyroFsr = gyroFsr;
     m_accelFsr = accelFsr;
+    m_dlpf = DLPF_260HZ;  // Default: DLPF disabled (fastest, 8kHz)
 
     // float gscale[] = {250., 500., 1000., 2000.};
     m_gyroScale = 1.0;  // gscale[gyroFsr] / 32768.;

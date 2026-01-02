@@ -76,7 +76,7 @@ static uint32_t readRegister(uint8_t i2cAddress, uint8_t reg) {
 /**************************************************************************/
 void HP203B::getAddr_HP203B(uint8_t i2cAddress) {
   hp_i2cAddress = i2cAddress;
-  hp_conversionDelay = HP203B_CONVERSIONDELAY;
+  hp_conversionDelay = 17;  // Default for OSR_512, will be updated by setOSR()
 }
 
 /**************************************************************************/
@@ -110,7 +110,34 @@ void HP203B::Reset() {
    Digital Filter
 */
 /**************************************************************************/
-void HP203B::setOSR(hpOSR_t osr) { hp_osr = osr; }
+void HP203B::setOSR(hpOSR_t osr) {
+  hp_osr = osr;
+
+  // Calculate conversion delay based on OSR (Temperature + Pressure/Altitude)
+  switch (osr) {
+    case OSR_128:
+      hp_conversionDelay = 5;  // 4.1ms -> round up to 5ms
+      break;
+    case OSR_256:
+      hp_conversionDelay = 9;  // 8.2ms -> round up to 9ms
+      break;
+    case OSR_512:
+      hp_conversionDelay = 17;  // 16.4ms -> round up to 17ms
+      break;
+    case OSR_1024:
+      hp_conversionDelay = 33;  // 32.8ms -> round up to 33ms
+      break;
+    case OSR_2048:
+      hp_conversionDelay = 66;  // 65.6ms -> round up to 66ms
+      break;
+    case OSR_4096:
+      hp_conversionDelay = 132;  // 131.1ms -> round up to 132ms
+      break;
+    default:
+      hp_conversionDelay = 17;  // Default to OSR_512 timing
+      break;
+  }
+}
 
 /**************************************************************************/
 /*

@@ -25,7 +25,7 @@
 /**************************************************************************
     CONVERSION DELAY (in ms)
 **************************************************************************/
-#define HP203B_CONVERSIONDELAY (17)  // OSR 512
+// Dynamic conversion delay based on OSR setting
 /*
 Table 5: Conversion Time VS OSR
 

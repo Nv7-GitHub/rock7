@@ -87,7 +87,7 @@ void setup() {
 
   // HP203B
   hp.getAddr_HP203B(HP203B_ADDRESS_UPDATED);
-  hp.setOSR(OSR_512);
+  hp.setOSR(OSR_256);
   if (!hp.begin()) {
     while (1) {
       ledWrite(0.1, 0.0, 0.0);
@@ -102,6 +102,8 @@ void setup() {
     Serial.println("MPU6500 not found!");
     delay(1000);
   }
+  mpu.setDLPF(Mpu6x00::DLPF_92HZ);  // 92 Hz bandwidth for smooth data
+  mpu.setODR(500);                  // 500 Hz sample rate
 
   // CAN
   odrv.onFeedback(odriveFeedback, NULL);
@@ -121,7 +123,7 @@ void setup() {
   CAN.onReceive(canCallback);
 
   // Enable closed-loop
-  /*while (lastHeartbeat.Axis_State !=
+  while (lastHeartbeat.Axis_State !=
          ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
     odrv.clearErrors();
     delay(1);
@@ -138,7 +140,7 @@ void setup() {
       delay(10);
       pumpEvents(CAN);
     }
-  }*/
+  }
 
   // Initialize filtAz
   extern float filtAz;
@@ -194,7 +196,7 @@ void loop() {
 
     Serial.print("alt:");
     Serial.print(hp.hp_sensorData.A);
-    /*Serial.print(",pres:");
+    Serial.print(",pres:");
     Serial.print(hp.hp_sensorData.P);
     Serial.print(",temp:");
     Serial.print(hp.hp_sensorData.T);
@@ -215,7 +217,7 @@ void loop() {
     Serial.print(",mvel:");
     Serial.print(motorvel);
     Serial.print(",filtaz:");
-    Serial.print(filtAz);*/
+    Serial.print(filtAz);
     Serial.print(",dt:");
     Serial.print(delTime + readTime);
     Serial.print(",rdt:");
