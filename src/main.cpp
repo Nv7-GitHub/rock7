@@ -36,6 +36,7 @@ void ledWrite(float r, float g, float b) {
 HP203B hp;
 Mpu6500 mpu(SPI1, IMU_CS);
 ODriveCAN odrv(wrap_can_intf(CAN), ODRV_NODE_ID);
+Heartbeat_msg_t lastHeartbeat;
 
 static inline void canCallback(int packet_size) {
   if (packet_size > 8) {
@@ -47,15 +48,15 @@ static inline void canCallback(int packet_size) {
   onReceive(msg, odrv);
 }
 
+float motorvel;
+float motorpos;
 void odriveFeedback(Get_Encoder_Estimates_msg_t& msg, void* user_data) {
-  Serial.print("canpos:");
-  Serial.print(msg.Pos_Estimate);
-  Serial.print(",canvel:");
-  Serial.println(msg.Vel_Estimate);
+  motorpos = msg.Pos_Estimate;
+  motorvel = msg.Vel_Estimate;
 }
 
 void odriveHeartbeat(Heartbeat_msg_t& msg, void* user_data) {
-  Serial.println("ODrive Heartbeat!");
+  lastHeartbeat = msg;
 }
 
 void setup() {
@@ -118,10 +119,38 @@ void setup() {
   }
 
   CAN.onReceive(canCallback);
+
+  // Enable closed-loop
+  while (lastHeartbeat.Axis_State !=
+         ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
+    odrv.clearErrors();
+    delay(1);
+    odrv.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    // Pump events for 150ms. This delay is needed for two reasons;
+    // 1. If there is an error condition, such as missing DC power, the ODrive
+    // might
+    //    briefly attempt to enter CLOSED_LOOP_CONTROL state, so we can't rely
+    //    on the first heartbeat response, so we want to receive at least two
+    //    heartbeats (100ms default interval).
+    // 2. If the bus is congested, the setState command won't get through
+    //    immediately but can be delayed.
+    for (int i = 0; i < 15; ++i) {
+      delay(10);
+      pumpEvents(CAN);
+    }
+  }
+
+  // Initialize filtAz
+  extern float filtAz;
+  float ax, ay, az;
+  mpu.readSensor();
+  mpu.getAccel(ax, ay, az);
+  filtAz = az;
 }
 
+float filtAz = 0.0f;
 void loop() {
-  /*hp.Measure_Altitude();
+  hp.Measure_Altitude();
   Serial.print("alt:");
   Serial.print(hp.hp_sensorData.A);
   hp.Measure_Pressure();
@@ -130,17 +159,17 @@ void loop() {
   hp.Measure_Temperature();
   Serial.print(",temp:");
   Serial.print(hp.hp_sensorData.T);
-  Serial.println();*/
 
-  /*float ax, ay, az;
+  float ax, ay, az;
   mpu.readSensor();
   mpu.getAccel(ax, ay, az);
-  Serial.print("ax:");
+  Serial.print(",ax:");
   Serial.print(ax);
   Serial.print(",ay:");
   Serial.print(ay);
   Serial.print(",az:");
   Serial.print(az);
+
   float gx, gy, gz;
   mpu.getGyro(gx, gy, gz);
   Serial.print(",gx:");
@@ -148,18 +177,19 @@ void loop() {
   Serial.print(",gy:");
   Serial.print(gy);
   Serial.print(",gz:");
-  Serial.println(gz);
-  delay(50);*/
+  Serial.print(gz);
+
+  Serial.print(",mpos:");
+  Serial.print(motorpos);
+  Serial.print(",mvel:");
+  Serial.print(motorvel);
+  Serial.print("filtaz:");
+  Serial.print(filtAz);
+  Serial.println();
 
   ledWrite(0.0, 0.1, 0.0);  // Set LED to green
-  delay(1000);
 
-  // Try to read vbus
-  Get_Bus_Voltage_Current_msg_t vbus;
-  if (!odrv.request(vbus, 1000)) {
-    Serial.println("vbus request failed!");
-  } else {
-    Serial.print("DC voltage [V]: ");
-    Serial.println(vbus.Bus_Voltage);
-  }
+  // Make odrive position depend on az
+  filtAz = 0.5f * filtAz + 0.5f * az;
+  odrv.setPosition(filtAz * 10.0f);
 }
