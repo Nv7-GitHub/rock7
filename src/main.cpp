@@ -121,7 +121,7 @@ void setup() {
   CAN.onReceive(canCallback);
 
   // Enable closed-loop
-  while (lastHeartbeat.Axis_State !=
+  /*while (lastHeartbeat.Axis_State !=
          ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
     odrv.clearErrors();
     delay(1);
@@ -138,7 +138,7 @@ void setup() {
       delay(10);
       pumpEvents(CAN);
     }
-  }
+  }*/
 
   // Initialize filtAz
   extern float filtAz;
@@ -146,50 +146,84 @@ void setup() {
   mpu.readSensor();
   mpu.getAccel(ax, ay, az);
   filtAz = az;
+
+  // Start first HP203B conversion
+  hp.startConversion();
 }
 
 float filtAz = 0.0f;
-void loop() {
-  hp.Measure_Altitude();
-  Serial.print("alt:");
-  Serial.print(hp.hp_sensorData.A);
-  hp.Measure_Pressure();
-  Serial.print(",pres:");
-  Serial.print(hp.hp_sensorData.P);
-  hp.Measure_Temperature();
-  Serial.print(",temp:");
-  Serial.print(hp.hp_sensorData.T);
+unsigned long lastPrintTime = 0;
 
+unsigned long readTime;
+void loop() {
+  // Non-blocking HP203B read
+  unsigned long start = micros();
+  if (hp.isConversionReady()) {
+    hp.readAllData();
+    hp.startConversion();  // Start next conversion
+    readTime = micros() - start;
+  }
+  start = micros();
+
+  // Fast loop: Read IMU and update ODrive continuously
   float ax, ay, az;
   mpu.readSensor();
   mpu.getAccel(ax, ay, az);
-  Serial.print(",ax:");
-  Serial.print(ax);
-  Serial.print(",ay:");
-  Serial.print(ay);
-  Serial.print(",az:");
-  Serial.print(az);
 
   float gx, gy, gz;
   mpu.getGyro(gx, gy, gz);
-  Serial.print(",gx:");
-  Serial.print(gx);
-  Serial.print(",gy:");
-  Serial.print(gy);
-  Serial.print(",gz:");
-  Serial.print(gz);
 
-  Serial.print(",mpos:");
-  Serial.print(motorpos);
-  Serial.print(",mvel:");
-  Serial.print(motorvel);
-  Serial.print("filtaz:");
-  Serial.print(filtAz);
-  Serial.println();
+  // Convert from raw counts to rad/s
+  // Gyro range is ±2000 deg/s, 16-bit signed = 32768 counts
+  // Scale: (2000.0 / 32768.0) * (PI / 180.0) = 0.001065264 rad/s per count
+  const float gyroScale = (2000.0f / 32768.0f) * (PI / 180.0f);
+  gx *= gyroScale;
+  gy *= gyroScale;
+  gz *= gyroScale;
 
-  ledWrite(0.0, 0.1, 0.0);  // Set LED to green
+  unsigned long delTime = micros() - start;
 
-  // Make odrive position depend on az
-  filtAz = 0.5f * filtAz + 0.5f * az;
+  // Update filtered Az and ODrive position
+  filtAz = 0.9f * filtAz + 0.1f * az;
   odrv.setPosition(filtAz * 10.0f);
+
+  // Print data every 50ms
+  unsigned long currentTime = millis();
+  if (currentTime - lastPrintTime >= 50) {
+    lastPrintTime = currentTime;
+
+    Serial.print("alt:");
+    Serial.print(hp.hp_sensorData.A);
+    /*Serial.print(",pres:");
+    Serial.print(hp.hp_sensorData.P);
+    Serial.print(",temp:");
+    Serial.print(hp.hp_sensorData.T);
+    Serial.print(",ax:");
+    Serial.print(ax);
+    Serial.print(",ay:");
+    Serial.print(ay);
+    Serial.print(",az:");
+    Serial.print(az);
+    Serial.print(",gx:");
+    Serial.print(gx);
+    Serial.print(",gy:");
+    Serial.print(gy);
+    Serial.print(",gz:");
+    Serial.print(gz);
+    Serial.print(",mpos:");
+    Serial.print(motorpos);
+    Serial.print(",mvel:");
+    Serial.print(motorvel);
+    Serial.print(",filtaz:");
+    Serial.print(filtAz);*/
+    Serial.print(",dt:");
+    Serial.print(delTime + readTime);
+    Serial.print(",rdt:");
+    Serial.print(readTime);
+    Serial.print(",ldt:");
+    Serial.print(delTime);
+    Serial.println();
+
+    ledWrite(0.0, 0.1, 0.0);  // Set LED to green
+  }
 }

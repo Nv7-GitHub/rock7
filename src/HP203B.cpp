@@ -16,7 +16,7 @@
 
 #include <Wire.h>
 
-#include "HP203B.h"
+#include "HP203b.h"
 
 /**************************************************************************/
 /*
@@ -122,88 +122,52 @@ hpOSR_t HP203B::getOSR() { return hp_osr; }
 
 /**************************************************************************/
 /*
-        Reads up the Device comprising of a Pressure, Altitude & Temperature
-   Sensor
+        Non-blocking interface: Start a conversion
 */
 /**************************************************************************/
-void HP203B::Measure_Sensor(void) {
-  // Read all the Sensors
-  Measure_Pressure();
-  Measure_Altitude();
-  Measure_Temperature();
-}
-
-/**************************************************************************/
-/*
-        Reads 20-bits from the destination register
-        Reads the results for Digital Pressure Value
-*/
-/**************************************************************************/
-void HP203B::Measure_Pressure() {
-  // Set Up the Configuration for the Pressure Sensor
+void HP203B::startConversion(void) {
+  // Start conversion for pressure/altitude and temperature
   uint8_t command =
       HP203B_CMD_CONVERT |  // Convert the Sensor Output to the Digital Values
       HP203B_CMD_CHNL_PRESTEMP;  // Sensor Pressure and Temperature Channel
 
   command |= hp_osr;  // OSR
 
-  // Write the configuration to the Pressure Sensor
   writeRegister(hp_i2cAddress, command);
+  hp_conversionStartTime = millis();
+}
 
-  // Wait for the configuration to complete
-  delay(hp_conversionDelay);
+/**************************************************************************/
+/*
+        Non-blocking interface: Check if conversion is ready
+*/
+/**************************************************************************/
+bool HP203B::isConversionReady(void) {
+  return (millis() - hp_conversionStartTime) >= hp_conversionDelay;
+}
 
-  // Reads the pressure value
+/**************************************************************************/
+/*
+        Non-blocking interface: Get conversion delay in ms
+*/
+/**************************************************************************/
+uint8_t HP203B::getConversionDelay(void) { return hp_conversionDelay; }
+
+/**************************************************************************/
+/*
+        Non-blocking interface: Read all data (P, A, T) after conversion
+*/
+/**************************************************************************/
+void HP203B::readAllData(void) {
+  // Read pressure
   uint32_t pressure = readRegister(hp_i2cAddress, HP203B_CMD_READ_P);
   hp_sensorData.P = pressure / 100.0;
-}
 
-/**************************************************************************/
-/*
-        Reads 20-bits from the destination register
-        Reads the results for Digital Altitude Value
-*/
-/**************************************************************************/
-void HP203B::Measure_Altitude() {
-  // Set Up the Configuration for the Altitude Sensor
-  uint8_t command =
-      HP203B_CMD_CONVERT |  // Convert the Sensor Output to the Digital Values
-      HP203B_CMD_CHNL_PRESTEMP;  // Sensor Pressure and Temperature Channel
-
-  command |= hp_osr;  // OSR
-
-  // Write the configuration to the Altitude Sensor
-  writeRegister(hp_i2cAddress, command);
-
-  // Wait for the configuration to complete
-  delay(hp_conversionDelay);
-
-  // Reads the Altitude value
+  // Read altitude
   uint32_t altitude = readRegister(hp_i2cAddress, HP203B_CMD_READ_A);
   hp_sensorData.A = altitude / 100.0;
-}
 
-/**************************************************************************/
-/*
-        Reads 20-bits from the destination register
-        Reads the results for Digital Temperature Value
-*/
-/**************************************************************************/
-void HP203B::Measure_Temperature() {
-  // Set Up the Configuration for the Temperature Sensor
-  uint8_t command =
-      HP203B_CMD_CONVERT |  // Convert the Sensor Output to the Digital Values
-      HP203B_CMD_CHNL_PRESTEMP;  // Sensor Pressure and Temperature Channel
-
-  command |= hp_osr;  // OSR
-
-  // Write the configuration to the Temperature Sensor
-  writeRegister(hp_i2cAddress, command);
-
-  // Wait for the configuration to complete
-  delay(hp_conversionDelay);
-
-  // Reads the Temperature value
+  // Read temperature
   uint32_t temperature = readRegister(hp_i2cAddress, HP203B_CMD_READ_T);
   hp_sensorData.T = temperature / 100.0;
 }

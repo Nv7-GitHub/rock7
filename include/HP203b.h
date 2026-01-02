@@ -86,19 +86,23 @@ class HP203B {
   // Instance-specific properties
   uint8_t hp_conversionDelay;
   hpOSR_t hp_osr;
+  unsigned long hp_conversionStartTime;
 
  public:
   uint8_t hp_i2cAddress;
   hpSensorData_t hp_sensorData;
-  void Reset(void);
+
   void getAddr_HP203B(uint8_t i2cAddress);
   bool begin(void);
-  void Measure_Sensor(void);
-  void Measure_Pressure(void);
-  void Measure_Altitude(void);
-  void Measure_Temperature(void);
   void setOSR(hpOSR_t osr);
   hpOSR_t getOSR(void);
+  void Reset(void);
+
+  // Non-blocking interface
+  void startConversion(void);
+  bool isConversionReady(void);
+  uint8_t getConversionDelay(void);
+  void readAllData(void);
 
  private:
 };
