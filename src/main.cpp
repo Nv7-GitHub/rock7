@@ -12,11 +12,6 @@ void setup() {
 
   setupHardware();
 
-  while (!Serial) {
-    // wait for Serial to be ready
-    delay(10);
-  }
-
   // Initialize flash logging
   initFlash();
 
@@ -38,13 +33,6 @@ void setup() {
 void loop() {
   handleFlashCommands();
   logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1]);
-
-  // Flush buffered data to flash every 10 loops (~200ms at 50Hz)
-  static int loopCounter = 0;
-  if (++loopCounter >= 10) {
-    flushLogBuffer();
-    loopCounter = 0;
-  }
 
   // Print to serial for monitoring
   Serial.print("Altitude: ");

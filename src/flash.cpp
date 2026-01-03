@@ -15,7 +15,7 @@ struct __attribute__((packed)) FlightRecord {
 };
 
 // RAM buffer for non-blocking writes
-#define BUFFER_SIZE 128  // 128 records = 3KB buffer
+#define BUFFER_SIZE 768  // 768 records = 18KB buffer (~15 seconds at 50Hz)
 static FlightRecord writeBuffer[BUFFER_SIZE];
 static volatile int bufferHead = 0;
 static volatile int bufferTail = 0;
@@ -93,8 +93,11 @@ void logFlightData(float altitude, float velocity, float accelBias,
   // Add to RAM buffer (non-blocking)
   int nextHead = (bufferHead + 1) % BUFFER_SIZE;
   if (nextHead == bufferTail) {
-    // Buffer full - skip this sample (shouldn't happen with proper flushing)
-    return;
+    // Buffer full - force flush now
+    flushLogBuffer();
+    // Try again after flush
+    nextHead = (bufferHead + 1) % BUFFER_SIZE;
+    if (nextHead == bufferTail) return;  // Still full, skip
   }
 
   writeBuffer[bufferHead].time_ms = millis() - logStartTime;
@@ -115,6 +118,9 @@ void flushLogBuffer() {
     dataFile.write((uint8_t*)&writeBuffer[bufferTail], sizeof(FlightRecord));
     bufferTail = (bufferTail + 1) % BUFFER_SIZE;
   }
+
+  // Flush to disk so file size is accurate and data persists
+  dataFile.flush();
 }
 
 void handleFlashCommands() {
@@ -129,12 +135,26 @@ void handleFlashCommands() {
           if (dir.fileName().startsWith("flight_")) {
             Serial.print("FLASH:FLIGHT:");
             Serial.print(dir.fileName());
+
+            // Show file size in human-readable format
+            size_t fileSize = dir.fileSize();
             Serial.print(" (");
-            Serial.print(dir.fileSize());
-            Serial.print(" bytes)");
+            if (fileSize >= 1024 * 1024) {
+              Serial.print(fileSize / (1024.0 * 1024.0), 2);
+              Serial.print(" MB");
+            } else if (fileSize >= 1024) {
+              Serial.print(fileSize / 1024.0, 2);
+              Serial.print(" KB");
+            } else {
+              Serial.print(fileSize);
+              Serial.print(" bytes");
+            }
+            Serial.print(")");
+
             // Mark if this is the current active flight
-            String currentFile = "/flight_" + String(flightNumber) + ".bin";
-            if (dir.fileName() == currentFile) {
+            String currentFile = "flight_" + String(flightNumber) + ".bin";
+            if (dir.fileName() == currentFile ||
+                dir.fileName() == ("/" + currentFile)) {
               Serial.print(" [ACTIVE]");
             }
             Serial.println();
@@ -151,6 +171,7 @@ void handleFlashCommands() {
         // Close current file if it's the one being downloaded
         bool needReopen = false;
         if (flightNum == flightNumber && dataFile) {
+          dataFile.flush();  // Ensure all data is written before closing
           dataFile.close();
           needReopen = true;
         }
@@ -192,10 +213,34 @@ void handleFlashCommands() {
         FSInfo fs_info;
         LittleFS.info(fs_info);
         Serial.print("FLASH:STORAGE: ");
-        Serial.print(fs_info.usedBytes);
+
+        // Format used bytes
+        if (fs_info.usedBytes >= 1024 * 1024) {
+          Serial.print(fs_info.usedBytes / (1024.0 * 1024.0), 2);
+          Serial.print(" MB");
+        } else if (fs_info.usedBytes >= 1024) {
+          Serial.print(fs_info.usedBytes / 1024.0, 2);
+          Serial.print(" KB");
+        } else {
+          Serial.print(fs_info.usedBytes);
+          Serial.print(" bytes");
+        }
+
         Serial.print(" / ");
-        Serial.print(fs_info.totalBytes);
-        Serial.println(" bytes used");
+
+        // Format total bytes
+        if (fs_info.totalBytes >= 1024 * 1024) {
+          Serial.print(fs_info.totalBytes / (1024.0 * 1024.0), 2);
+          Serial.print(" MB");
+        } else if (fs_info.totalBytes >= 1024) {
+          Serial.print(fs_info.totalBytes / 1024.0, 2);
+          Serial.print(" KB");
+        } else {
+          Serial.print(fs_info.totalBytes);
+          Serial.print(" bytes");
+        }
+
+        Serial.println(" used");
       }
 
       commandBuffer = "";
