@@ -91,7 +91,9 @@ void setupHardware() {
   }
 
   CAN.onReceive(canCallback);
+}
 
+void EnableOdrv() {
   // Enable closed-loop
   while (lastHeartbeat.Axis_State !=
          ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {

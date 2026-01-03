@@ -35,5 +35,6 @@ extern float motorpos;
 
 extern void ledWrite(float r, float g, float b);
 void setupHardware();
+void EnableOdrv();
 
 #endif  // HARDWARE_H
