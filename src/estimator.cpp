@@ -56,7 +56,7 @@ void BiasUpdate() {
   normalizeVector(accNorm);
   scaleVector(accNorm, 9.80665f, accNorm);
   subtractVectors(a, a, accNorm);
-  // Also negative for same reason
+  // Also negative for same reason as gyro
   aBias[0] = (1.0f - alpha) * aBias[0] - alpha * a[0];
   aBias[1] = (1.0f - alpha) * aBias[1] - alpha * a[1];
   aBias[2] = (1.0f - alpha) * aBias[2] - alpha * a[2];
@@ -84,7 +84,7 @@ void OrientationInit() {
   copyVector(tmp, a);
   normalizeVector(tmp);
 
-  float cx = atanf(tmp[1] / tmp[2]);
+  float cx = atan2f(tmp[1], tmp[2]);
   float cy = -asinf(tmp[0]);
 
   if (isnan(cx) || isnan(cy)) {
