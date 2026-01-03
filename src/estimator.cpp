@@ -170,6 +170,7 @@ void GetGlobalAccel() {
 float x[3];
 float P[3][3];
 float Cd;
+float rawSensorData[2] = {0.0f, 0.0f};
 
 // Kalman filter constants
 float A[3][3] = {
@@ -263,8 +264,12 @@ void FilterUpdate() {
       float I_KH_P[3][3];
       matrixProduct3x3(I_KH_P, I_KH, P);
       copyMatrix3x3(P, I_KH_P);
+
+      rawSensorData[1] = z;  // For flight data
     }
   }
+
+  rawSensorData[0] = aGlob[2];  // For flight data
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
