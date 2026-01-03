@@ -28,8 +28,8 @@
 #define BARO_SCL 5
 
 extern HP203B hp;
-extern Mpu6500 mpu(SPI1, IMU_CS);
-extern ODriveCAN odrv(wrap_can_intf(CAN), ODRV_NODE_ID);
+extern Mpu6500 mpu;
+extern ODriveCAN odrv;
 extern float motorvel;
 extern float motorpos;
 

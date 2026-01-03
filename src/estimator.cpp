@@ -3,8 +3,8 @@
 #include "algebra.h"
 
 // Constants
-#define LOOP_ACCEL 500  // Hz
-const float dT_accel = 1.0f / (float)LOOP_ACCEL;
+#define LOOPRATE 500  // Hz
+const float dT = 1.0f / (float)LOOPRATE;
 
 // Orientation estimation
 float C[3][3];
@@ -73,7 +73,7 @@ void OrientationUpdate() {
   // Calculate sigma
   float sig;
   vectorLength(&sig, g);
-  sig = dT_accel * sig;
+  sig = dT * sig;
   float csig = sinf(sig) / sig;
   float ssig = (1 - cosf(sig)) / pow(sig, 2);
 
@@ -82,7 +82,7 @@ void OrientationUpdate() {
 
   float phi[3][3];  // "B"
   skew(phi, g);
-  scaleMatrix3x3(phi, dT_accel, phi);
+  scaleMatrix3x3(phi, dT, phi);
   float tmp[3][3];  // "B^2"
   matrixProduct3x3(tmp, phi, phi);
 
@@ -95,7 +95,8 @@ void OrientationUpdate() {
   copyMatrix3x3(C, tmp);
 }
 
-void GetGlobalAccel(float aGlob[3]) {
+float aGlob[3];
+void GetGlobalAccel() {
   float aBody[3];
   mpu.getAccel(aBody[0], aBody[1], aBody[2]);
   matrixDotVector3x3(aGlob, C, aBody);
@@ -107,3 +108,27 @@ void GetGlobalAccel(float aGlob[3]) {
 // Kalman filter
 float x[3];
 float P[3][3];
+
+void FilterReset() {
+  ReadIMU();
+  OrientationInit();
+}
+void FilterUpdate() {
+  // Timing
+  unsigned long start = micros();
+
+  // Read IMU
+  ReadIMU();
+
+  // Update orientation filter
+  OrientationUpdate();
+  GetGlobalAccel();
+
+  // Delay to looprate
+  unsigned long deltmicros = micros() - start;
+  if (deltmicros < (unsigned long)(dT * 1e6f)) {
+    delayMicroseconds((unsigned long)(dT * 1e6f) - deltmicros);
+  } else {
+    Serial.println("ERROR: LOOP OVERRUN");
+  }
+}

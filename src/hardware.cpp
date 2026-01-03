@@ -110,5 +110,130 @@ void setupHardware() {
       delay(10);
       pumpEvents(CAN);
     }
+
+    // If in error, read out error (print human-readable names)
+    if (lastHeartbeat.Axis_State == ODriveAxisState::AXIS_STATE_IDLE &&
+        lastHeartbeat.Axis_Error != 0) {
+      Serial.print("ODrive error: ");
+      uint32_t e = lastHeartbeat.Axis_Error;
+      bool any = false;
+      if (e & ODRIVE_ERROR_INITIALIZING) {
+        if (any) Serial.print(", ");
+        Serial.print("INITIALIZING");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_SYSTEM_LEVEL) {
+        if (any) Serial.print(", ");
+        Serial.print("SYSTEM_LEVEL");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_TIMING_ERROR) {
+        if (any) Serial.print(", ");
+        Serial.print("TIMING_ERROR");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_MISSING_ESTIMATE) {
+        if (any) Serial.print(", ");
+        Serial.print("MISSING_ESTIMATE");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_BAD_CONFIG) {
+        if (any) Serial.print(", ");
+        Serial.print("BAD_CONFIG");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_DRV_FAULT) {
+        if (any) Serial.print(", ");
+        Serial.print("DRV_FAULT");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_MISSING_INPUT) {
+        if (any) Serial.print(", ");
+        Serial.print("MISSING_INPUT");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_DC_BUS_OVER_VOLTAGE) {
+        if (any) Serial.print(", ");
+        Serial.print("DC_BUS_OVER_VOLTAGE");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_DC_BUS_UNDER_VOLTAGE) {
+        if (any) Serial.print(", ");
+        Serial.print("DC_BUS_UNDER_VOLTAGE");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_DC_BUS_OVER_CURRENT) {
+        if (any) Serial.print(", ");
+        Serial.print("DC_BUS_OVER_CURRENT");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_DC_BUS_OVER_REGEN_CURRENT) {
+        if (any) Serial.print(", ");
+        Serial.print("DC_BUS_OVER_REGEN_CURRENT");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_CURRENT_LIMIT_VIOLATION) {
+        if (any) Serial.print(", ");
+        Serial.print("CURRENT_LIMIT_VIOLATION");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_MOTOR_OVER_TEMP) {
+        if (any) Serial.print(", ");
+        Serial.print("MOTOR_OVER_TEMP");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_INVERTER_OVER_TEMP) {
+        if (any) Serial.print(", ");
+        Serial.print("INVERTER_OVER_TEMP");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_VELOCITY_LIMIT_VIOLATION) {
+        if (any) Serial.print(", ");
+        Serial.print("VELOCITY_LIMIT_VIOLATION");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_POSITION_LIMIT_VIOLATION) {
+        if (any) Serial.print(", ");
+        Serial.print("POSITION_LIMIT_VIOLATION");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_WATCHDOG_TIMER_EXPIRED) {
+        if (any) Serial.print(", ");
+        Serial.print("WATCHDOG_TIMER_EXPIRED");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_ESTOP_REQUESTED) {
+        if (any) Serial.print(", ");
+        Serial.print("ESTOP_REQUESTED");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_SPINOUT_DETECTED) {
+        if (any) Serial.print(", ");
+        Serial.print("SPINOUT_DETECTED");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_BRAKE_RESISTOR_DISARMED) {
+        if (any) Serial.print(", ");
+        Serial.print("BRAKE_RESISTOR_DISARMED");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_THERMISTOR_DISCONNECTED) {
+        if (any) Serial.print(", ");
+        Serial.print("THERMISTOR_DISCONNECTED");
+        any = true;
+      }
+      if (e & ODRIVE_ERROR_CALIBRATION_ERROR) {
+        if (any) Serial.print(", ");
+        Serial.print("CALIBRATION_ERROR");
+        any = true;
+      }
+      if (!any) {
+        // Unknown bits set, fall back to hex
+        Serial.print("0x");
+        Serial.println(e, HEX);
+      } else {
+        Serial.println();
+      }
+    }
   }
 }
