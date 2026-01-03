@@ -213,11 +213,16 @@ class Mpu6x00 {
     m_accelFsr = accelFsr;
     m_dlpf = DLPF_260HZ;  // Default: DLPF disabled (fastest, 8kHz)
 
-    // float gscale[] = {250., 500., 1000., 2000.};
-    m_gyroScale = 1.0;  // gscale[gyroFsr] / 32768.;
+    // gyro full-scale values in degrees/sec for each enum entry
+    float gscale[] = {250.0f, 500.0f, 1000.0f, 2000.0f};
+    // convert to rad/s: (deg/s) / 32768 * (PI/180)
+    m_gyroScale =
+        (gscale[gyroFsr] / 32768.0f) * (3.14159265358979323846f / 180.0f);
 
-    float ascale[] = {2., 4., 8., 16.};
-    m_accelScale = ascale[accelFsr] / 32768.;
+    // accel full-scale values in g for each enum entry
+    float ascale[] = {2.0f, 4.0f, 8.0f, 16.0f};
+    // convert to m/s^2: (g) / 32768 * 9.80665
+    m_accelScale = (ascale[accelFsr] / 32768.0f) * 9.80665f;
   }
 
   void writeRegister(const uint8_t reg, const uint8_t val) {

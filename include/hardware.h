@@ -1,0 +1,39 @@
+#ifndef HARDWARE_H
+#define HARDWARE_H
+
+#include "HP203b.h"
+#include "ODriveCAN.h"
+#include "ODriveMCPCAN.hpp"
+#include "mpu6x00.h"
+
+#define LEDR 22
+#define LEDG 24
+#define LEDB 23
+
+#define IMU_SCK 10
+#define IMU_MOSI 11
+#define IMU_MISO 12
+#define IMU_CS 13
+
+#define CAN_MISO 16
+#define CAN_CS 17
+#define CAN_SCK 18
+#define CAN_MOSI 19
+#define CAN_INT 20
+#define MCP2515_CLK_HZ 16000000
+#define CAN_BAUDRATE 250000
+#define ODRV_NODE_ID 0
+
+#define BARO_SDA 4
+#define BARO_SCL 5
+
+extern HP203B hp;
+extern Mpu6500 mpu(SPI1, IMU_CS);
+extern ODriveCAN odrv(wrap_can_intf(CAN), ODRV_NODE_ID);
+extern float motorvel;
+extern float motorpos;
+
+extern void ledWrite(float r, float g, float b);
+void setupHardware();
+
+#endif  // HARDWARE_H
