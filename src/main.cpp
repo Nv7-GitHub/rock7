@@ -21,14 +21,6 @@ void setup() {
   unsigned long start = millis();
   while (millis() - start < 1000) {
     OrientationBiasUpdate();
-    extern float gBias[3];
-    Serial.print("gxbias:");
-    Serial.print(gBias[0], 3);
-    Serial.print(",gybias:");
-    Serial.print(gBias[1], 3);
-    Serial.print(",gzbias:");
-    Serial.print(gBias[2], 3);
-    Serial.println();
   }
 
   // Initialize orientation filter
@@ -39,15 +31,20 @@ void setup() {
 }
 
 void loop() {
-  // Print data every 50ms
-  Serial.print("ax:");
-  Serial.print(aGlob[0], 3);
-  Serial.print(",ay:");
-  Serial.print(aGlob[1], 3);
-  Serial.print(",az:");
-  Serial.print(aGlob[2], 3);
-  Serial.println();
-  delay(50);
+  // Calculate stdev
+  float avgAz = 0.0f;
+  float rmsAz = 0.0f;
+  for (int i = 0; i < 1000; i++) {
+    delayMicroseconds(2000);
+    rmsAz += aGlob[2] * aGlob[2];
+    avgAz += aGlob[2];
+  }
+  avgAz /= 1000.0f;
+  rmsAz = sqrtf(rmsAz / 1000.0f - avgAz * avgAz);
+  Serial.print("Accel Z stdev:");
+  Serial.print(rmsAz, 6);
+  Serial.print(", mean:");
+  Serial.println(avgAz, 6);
 }
 
 void setup1() {

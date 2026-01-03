@@ -6,6 +6,11 @@
 #define LOOPRATE 500  // Hz
 const float dT = 1.0f / (float)LOOPRATE;
 
+// Experimentally calibrated z-accel data
+// const float sigma_aZ = 0.0332f;  // m/s^2, experimental
+const float sigma_aZ = 0.044f;   // m/s^2, calculated from datasheet
+const float sigma_bZ = 0.0014f;  // m/s^2 per sqrt(s), experimental
+
 // Orientation estimation
 float C[3][3];
 
@@ -140,6 +145,7 @@ void FilterReset() {
   ReadIMU();
   OrientationInit();
 }
+
 void FilterUpdate() {
   // Timing
   unsigned long start = micros();
@@ -150,6 +156,10 @@ void FilterUpdate() {
   // Update orientation filter
   OrientationUpdate();
   GetGlobalAccel();
+
+  // Kalman prediction step
+  x[0] = x[0] + dT * x[1] - 0.5f * dT * dT * x[2] + 0.5f * dT * dT * aGlob[2];
+  x[1] = x[1] - dT * x[2] + dT * aGlob[2];
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;

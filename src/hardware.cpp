@@ -1,7 +1,7 @@
 #include "hardware.h"
 
 HP203B hp;
-Mpu6500 mpu(SPI1, IMU_CS);
+Mpu6500 mpu(SPI1, IMU_CS, Mpu6x00::GYRO_2000DPS, Mpu6x00::ACCEL_16G);
 ODriveCAN odrv(wrap_can_intf(CAN), ODRV_NODE_ID);
 Heartbeat_msg_t lastHeartbeat;
 
@@ -72,8 +72,8 @@ void setupHardware() {
     Serial.println("MPU6500 not found!");
     delay(1000);
   }
-  mpu.setDLPF(Mpu6x00::DLPF_92HZ);  // 92 Hz bandwidth for smooth data
-  mpu.setODR(500);                  // 500 Hz sample rate
+  mpu.setDLPF(Mpu6x00::DLPF_184HZ);  // 184 Hz bandwidth for smooth data
+  mpu.setODR(500);                   // 500 Hz sample rate
 
   // CAN
   odrv.onFeedback(odriveFeedback, NULL);
