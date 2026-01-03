@@ -11,6 +11,9 @@ const float dT = 1.0f / (float)LOOPRATE;
 const float sigma_aZ = 0.044f;   // m/s^2, calculated from datasheet
 const float sigma_bZ = 0.0014f;  // m/s^2 per sqrt(s), experimental
 const float sigma_x = 2.1f;      // m, experimental
+const float scale_aZ =
+    1.0f /
+    1.015f;  // Accelerometer scale factor, for some reason only z is scaled
 
 // Orientation estimation
 float C[3][3];
@@ -50,6 +53,8 @@ void BiasUpdate() {
   // Accel bias (Z only)
   float a[3];
   mpu.getAccel(a[0], a[1], a[2]);
+  a[2] *= scale_aZ;  // Scale correction
+
   // Subtract gravity from accel vector, in direction of magnitude
   float accNorm[3];
   copyVector(accNorm, a);
@@ -75,6 +80,7 @@ void OrientationInit() {
   // Read
   float a[3];
   mpu.getAccel(a[0], a[1], a[2]);
+  a[2] *= scale_aZ;  // Scale correction
   if (a[2] == 0.0f) {
     a[2] = 0.0001f;  // Prevent division by zero
   }
@@ -159,6 +165,7 @@ float aGlob[3];
 void GetGlobalAccel() {
   float aBody[3];
   mpu.getAccel(aBody[0], aBody[1], aBody[2]);
+  aBody[2] *= scale_aZ;             // Scale correction
   sumVectors(aBody, aBody, aBias);  // Bias calibration
   matrixDotVector3x3(aGlob, C, aBody);
 

@@ -19,7 +19,7 @@ void setup() {
   ledWrite(0.0, 0.0, 0.1);
   unsigned long start = millis();
   hp.startConversion();
-  while (millis() - start < 1000) {
+  while (millis() - start < 5000) {
     BiasUpdate();
   }
 
