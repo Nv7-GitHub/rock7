@@ -19,8 +19,9 @@ void setup() {
   // Calibrate gyro bias for 1s
   ledWrite(0.1, 0.0, 0.0);
   unsigned long start = millis();
+  hp.startConversion();
   while (millis() - start < 1000) {
-    OrientationBiasUpdate();
+    BiasUpdate();
   }
 
   // Initialize orientation filter
@@ -31,20 +32,14 @@ void setup() {
 }
 
 void loop() {
-  // Calculate stdev
-  float avgAz = 0.0f;
-  float rmsAz = 0.0f;
-  for (int i = 0; i < 1000; i++) {
-    delayMicroseconds(2000);
-    rmsAz += aGlob[2] * aGlob[2];
-    avgAz += aGlob[2];
-  }
-  avgAz /= 1000.0f;
-  rmsAz = sqrtf(rmsAz / 1000.0f - avgAz * avgAz);
-  Serial.print("Accel Z stdev:");
-  Serial.print(rmsAz, 6);
-  Serial.print(", mean:");
-  Serial.println(avgAz, 6);
+  Serial.print("Altitude: ");
+  Serial.print(x[0]);
+  Serial.print(" m, Velocity: ");
+  Serial.print(x[1]);
+  Serial.print(" m/s, Accel Bias: ");
+  Serial.print(x[2]);
+  Serial.println(" m/s^2");
+  delay(50);
 }
 
 void setup1() {

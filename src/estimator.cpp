@@ -10,6 +10,7 @@ const float dT = 1.0f / (float)LOOPRATE;
 // const float sigma_aZ = 0.0332f;  // m/s^2, experimental
 const float sigma_aZ = 0.044f;   // m/s^2, calculated from datasheet
 const float sigma_bZ = 0.0014f;  // m/s^2 per sqrt(s), experimental
+const float sigma_x = 2.1f;      // m, experimental
 
 // Orientation estimation
 float C[3][3];
@@ -19,9 +20,11 @@ extern Mpu6500 mpu;
 void ReadIMU() { mpu.readSensor(); }
 
 float gBias[3] = {0.0f, 0.0f, 0.0f};
+float hpBias = 0.0f;
+float accelBias = 0.0f;
 
-// Gyro bias handling
-void OrientationBiasUpdate() {
+// Gyro bias handling, note: run hp.startConversion() before
+void BiasUpdate() {
   unsigned long start = micros();
   ReadIMU();
   float g[3];
@@ -32,6 +35,24 @@ void OrientationBiasUpdate() {
   gBias[0] = (1.0f - alpha) * gBias[0] - alpha * g[0];
   gBias[1] = (1.0f - alpha) * gBias[1] - alpha * g[1];
   gBias[2] = (1.0f - alpha) * gBias[2] - alpha * g[2];
+
+  // Barometer bias
+  if (hp.isConversionReady()) {
+    hp.readAllData();
+    if (fabsf(hpBias) < 0.01f) {
+      hpBias = hp.hp_sensorData.A;
+    } else {
+      hpBias = 0.9f * hpBias + 0.1f * hp.hp_sensorData.A;
+    }
+    hp.startConversion();
+  }
+
+  // Accel bias (Z only)
+  float a[3];
+  mpu.getAccel(a[0], a[1], a[2]);
+  float accNorm;
+  vectorLength(&accNorm, a);
+  accelBias = (1.0f - alpha) * accelBias + alpha * (accNorm - 9.80665f);
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
@@ -137,13 +158,44 @@ void GetGlobalAccel() {
   aGlob[2] -= 9.80665f;
 }
 
-// Kalman filter
+// Kalman filter state
 float x[3];
 float P[3][3];
+
+// Kalman filter constants
+float A[3][3] = {
+    {1.0f, dT, -0.5f * dT* dT},
+    {0.0f, 1.0f, -dT},
+    {0.0f, 0.0f, 1.0f},
+};
+float B[3] = {0.5f * dT * dT, dT, 0.0f};
+float Q[3][3] = {
+    {sigma_aZ * sigma_aZ * dT * dT * dT * dT / 4.0f,
+     sigma_aZ * sigma_aZ * dT * dT * dT / 2.0f, 0.0f},
+    {sigma_aZ * sigma_aZ * dT * dT * dT / 2.0f, sigma_aZ * sigma_aZ * dT* dT,
+     0.0f},
+    {0.0f, 0.0f, sigma_bZ * sigma_bZ * dT},
+};
+float AT[3][3];  // A transpose
+float R = sigma_x * sigma_x;
 
 void FilterReset() {
   ReadIMU();
   OrientationInit();
+  transposeMatrix3x3(AT, A);
+  hp.startConversion();
+
+  // Initialize state
+  x[0] = 0.0f;
+  x[1] = 0.0f;
+  x[2] = accelBias;
+
+  // Initialize covariance to 0
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      P[i][j] = 0.0f;
+    }
+  }
 }
 
 void FilterUpdate() {
@@ -158,8 +210,45 @@ void FilterUpdate() {
   GetGlobalAccel();
 
   // Kalman prediction step
-  x[0] = x[0] + dT * x[1] - 0.5f * dT * dT * x[2] + 0.5f * dT * dT * aGlob[2];
-  x[1] = x[1] - dT * x[2] + dT * aGlob[2];
+  float x_pred[3];
+  matrixDotVector3x3(x_pred, A, x);
+  x_pred[0] += B[0] * (aGlob[2]);
+  x_pred[1] += B[1] * (aGlob[2]);
+  x_pred[2] += B[2] * (aGlob[2]);
+  copyVector(x, x_pred);
+
+  float AP[3][3];
+  matrixProduct3x3(AP, A, P);
+  float P_pred[3][3];
+  matrixProduct3x3(P_pred, AP, AT);
+  scaleAndAccumulateMatrix3x3(P_pred, 1.0f, Q);
+  copyMatrix3x3(P, P_pred);
+
+  // See if we have a new altitude reading
+  if (hp.isConversionReady()) {
+    hp.readAllData();
+    hp.startConversion();
+
+    // Kalman update step
+    float z = hp.hp_sensorData.A - hpBias;
+    float y = z - x[0];  // innovation
+    float S = P[0][0] + R;
+    float K[3];  // Kalman gain
+    K[0] = P[0][0] / S;
+    K[1] = P[1][0] / S;
+    K[2] = P[2][0] / S;
+    x[0] += K[0] * y;
+    x[1] += K[1] * y;
+    x[2] += K[2] * y;
+    float I_KH[3][3] = {
+        {1.0f - K[0], 0.0f, 0.0f},
+        {-K[1], 1.0f, 0.0f},
+        {-K[2], 0.0f, 1.0f},
+    };
+    float I_KH_P[3][3];
+    matrixProduct3x3(I_KH_P, I_KH, P);
+    copyMatrix3x3(P, I_KH_P);
+  }
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
