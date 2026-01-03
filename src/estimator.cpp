@@ -13,6 +13,30 @@ float C[3][3];
 extern Mpu6500 mpu;
 void ReadIMU() { mpu.readSensor(); }
 
+float gBias[3] = {0.0f, 0.0f, 0.0f};
+
+// Gyro bias handling
+void OrientationBiasUpdate() {
+  unsigned long start = micros();
+  ReadIMU();
+  float g[3];
+  mpu.getGyro(g[0], g[1], g[2]);
+
+  // Simple low-pass filter, use negative cuz we wanna subtract this later
+  float alpha = 0.01f;
+  gBias[0] = (1.0f - alpha) * gBias[0] - alpha * g[0];
+  gBias[1] = (1.0f - alpha) * gBias[1] - alpha * g[1];
+  gBias[2] = (1.0f - alpha) * gBias[2] - alpha * g[2];
+
+  // Delay to looprate
+  unsigned long deltmicros = micros() - start;
+  if (deltmicros < (unsigned long)(dT * 1e6f)) {
+    delayMicroseconds((unsigned long)(dT * 1e6f) - deltmicros);
+  } else {
+    Serial.println("ERROR: BIAS LOOP OVERRUN");
+  }
+}
+
 // Initializes orientation matrix to follow gravity vector
 void OrientationInit() {
   // Read
@@ -66,6 +90,9 @@ void OrientationUpdate() {
   if (g[2] == 0.0f) {
     g[2] = 0.0001f;
   }
+
+  // Subtract bias
+  sumVectors(g, g, gBias);
 
   // Rotation matrix code is from
   // https://huskiecommons.lib.niu.edu/cgi/viewcontent.cgi?article=1032&context=allgraduate-thesesdissertations

@@ -10,11 +10,25 @@ void setup() {
   sem_init(&setup_done, 0, 1);
 
   setupHardware();
-  unsigned long start = millis();
 
   while (!Serial) {
     // wait for Serial to be ready
     delay(10);
+  }
+
+  // Calibrate gyro bias for 1s
+  ledWrite(0.1, 0.0, 0.0);
+  unsigned long start = millis();
+  while (millis() - start < 1000) {
+    OrientationBiasUpdate();
+    extern float gBias[3];
+    Serial.print("gxbias:");
+    Serial.print(gBias[0], 3);
+    Serial.print(",gybias:");
+    Serial.print(gBias[1], 3);
+    Serial.print(",gzbias:");
+    Serial.print(gBias[2], 3);
+    Serial.println();
   }
 
   // Initialize orientation filter

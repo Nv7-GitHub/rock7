@@ -5,6 +5,7 @@
 
 void FilterReset();
 void FilterUpdate();
+void OrientationBiasUpdate();
 
 extern float aGlob[3];
 extern float x[3];
