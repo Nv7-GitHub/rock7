@@ -21,7 +21,7 @@ void ReadIMU() { mpu.readSensor(); }
 
 float gBias[3] = {0.0f, 0.0f, 0.0f};
 float hpBias = 0.0f;
-float accelBias = 0.0f;
+float aBias[3] = {0.0f, 0.0f, 0.0f};
 
 // Gyro bias handling, note: run hp.startConversion() before
 void BiasUpdate() {
@@ -50,9 +50,16 @@ void BiasUpdate() {
   // Accel bias (Z only)
   float a[3];
   mpu.getAccel(a[0], a[1], a[2]);
-  float accNorm;
-  vectorLength(&accNorm, a);
-  accelBias = (1.0f - alpha) * accelBias + alpha * (accNorm - 9.80665f);
+  // Subtract gravity from accel vector, in direction of magnitude
+  float accNorm[3];
+  copyVector(accNorm, a);
+  normalizeVector(accNorm);
+  scaleVector(accNorm, 9.80665f, accNorm);
+  subtractVectors(a, a, accNorm);
+  // Also negative for same reason
+  aBias[0] = (1.0f - alpha) * aBias[0] - alpha * a[0];
+  aBias[1] = (1.0f - alpha) * aBias[1] - alpha * a[1];
+  aBias[2] = (1.0f - alpha) * aBias[2] - alpha * a[2];
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
@@ -152,6 +159,7 @@ float aGlob[3];
 void GetGlobalAccel() {
   float aBody[3];
   mpu.getAccel(aBody[0], aBody[1], aBody[2]);
+  sumVectors(aBody, aBody, aBias);  // Bias calibration
   matrixDotVector3x3(aGlob, C, aBody);
 
   // Subtract gravity
@@ -161,6 +169,7 @@ void GetGlobalAccel() {
 // Kalman filter state
 float x[3];
 float P[3][3];
+float Cd;
 
 // Kalman filter constants
 float A[3][3] = {
@@ -188,7 +197,7 @@ void FilterReset() {
   // Initialize state
   x[0] = 0.0f;
   x[1] = 0.0f;
-  x[2] = accelBias;
+  x[2] = 0.0f;  // Bias calibrated out in local frame
 
   // Initialize covariance to 0
   for (int i = 0; i < 3; ++i) {
@@ -196,6 +205,9 @@ void FilterReset() {
       P[i][j] = 0.0f;
     }
   }
+
+  // Initial coefficient of drag
+  Cd = 0.5f;  // TODO: Precise number
 }
 
 void FilterUpdate() {
@@ -229,25 +241,29 @@ void FilterUpdate() {
     hp.readAllData();
     hp.startConversion();
 
-    // Kalman update step
-    float z = hp.hp_sensorData.A - hpBias;
-    float y = z - x[0];  // innovation
-    float S = P[0][0] + R;
-    float K[3];  // Kalman gain
-    K[0] = P[0][0] / S;
-    K[1] = P[1][0] / S;
-    K[2] = P[2][0] / S;
-    x[0] += K[0] * y;
-    x[1] += K[1] * y;
-    x[2] += K[2] * y;
-    float I_KH[3][3] = {
-        {1.0f - K[0], 0.0f, 0.0f},
-        {-K[1], 1.0f, 0.0f},
-        {-K[2], 0.0f, 1.0f},
-    };
-    float I_KH_P[3][3];
-    matrixProduct3x3(I_KH_P, I_KH, P);
-    copyMatrix3x3(P, I_KH_P);
+    // Only do Kalman update during coast phase, high accel (3G) or vel (30m/s)
+    // make it unreliable
+    if (fabsf(aGlob[2]) < 30.0f && fabsf(x[1]) < 30.0f) {
+      // Kalman update step
+      float z = hp.hp_sensorData.A - hpBias;
+      float y = z - x[0];  // innovation
+      float S = P[0][0] + R;
+      float K[3];  // Kalman gain
+      K[0] = P[0][0] / S;
+      K[1] = P[1][0] / S;
+      K[2] = P[2][0] / S;
+      x[0] += K[0] * y;
+      x[1] += K[1] * y;
+      x[2] += K[2] * y;
+      float I_KH[3][3] = {
+          {1.0f - K[0], 0.0f, 0.0f},
+          {-K[1], 1.0f, 0.0f},
+          {-K[2], 0.0f, 1.0f},
+      };
+      float I_KH_P[3][3];
+      matrixProduct3x3(I_KH_P, I_KH, P);
+      copyMatrix3x3(P, I_KH_P);
+    }
   }
 
   // Delay to looprate
@@ -256,5 +272,6 @@ void FilterUpdate() {
     delayMicroseconds((unsigned long)(dT * 1e6f) - deltmicros);
   } else {
     Serial.println("ERROR: LOOP OVERRUN");
+    Serial.printf("Loop time: %lu us\n", deltmicros);
   }
 }
