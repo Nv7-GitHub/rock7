@@ -13,10 +13,10 @@ void setup() {
   setupHardware();
 
   // Initialize flash logging
-  // initFlash();
+  initFlash();
 
   // Calibrate gyro bias for 1s
-  /*ledWrite(0.0, 0.0, 0.1);
+  ledWrite(0.0, 0.0, 0.1);
   unsigned long start = millis();
   hp.startConversion();
   while (millis() - start < 5000) {
@@ -24,69 +24,54 @@ void setup() {
   }
 
   // Initialize orientation filter
-  FilterReset();*/
+  FilterReset();
 
   // Indicate setup done
   sem_release(&setup_done);
-
-  // ODrive
-  EnableOdrv();
-  odrv.setPosition(0);
 }
 
 void loop() {
-  Serial.printf("motorpos: %f, motorvel: %f\n", motorpos, motorvel);
-  delay(100);
-  ledWrite(0.0, 0.1, 0.0);
+  handleFlashCommands();
 
-  // Ask for input and echo typed characters until Enter is pressed
-  Serial.print("Enter position setpoint (float): ");
+  // Get orientation from C matrix
+  float roll, pitch, yaw;
+  GetOrientation(&roll, &pitch, &yaw);
 
-  // Clear any stray input before we start
-  while (Serial.available() > 0) {
-    Serial.read();
-    delay(1);
+  // Log all data including motor position/velocity and orientation
+  logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1], motorpos,
+                motorvel, roll, pitch, yaw);
+
+  // Print to serial for monitoring
+  Serial.print("Altitude: ");
+  Serial.print(x[0]);
+  Serial.print(" m, Velocity: ");
+  Serial.print(x[1]);
+  Serial.print(" m/s, Accel Bias: ");
+  Serial.print(x[2]);
+  Serial.print(" m/s^2, Raw Accel: ");
+  Serial.print(rawSensorData[0]);
+  Serial.print(" m/s^2, Raw Baro: ");
+  Serial.print(rawSensorData[1]);
+  Serial.print(" m, Motor Pos: ");
+  Serial.print(motorpos);
+  Serial.print(", Motor Vel: ");
+  Serial.print(motorvel);
+  Serial.print(", Roll: ");
+  Serial.print(roll);
+  Serial.print(", Pitch: ");
+  Serial.print(pitch);
+  Serial.print(", Yaw: ");
+  Serial.print(yaw);
+  Serial.println();
+
+  delay(10);  // 100 Hz = 10ms
+
+  // LED indicator: yellow if low storage, green otherwise
+  if (checkStorageWarning()) {
+    ledWrite(0.1, 0.1, 0.0);  // Yellow warning
+  } else {
+    ledWrite(0.0, 0.1, 0.0);  // Green normal
   }
-
-  String input = "";
-  bool done = false;
-  while (!done) {
-    if (Serial.available() > 0) {
-      char c = (char)Serial.read();
-      // Handle CR or LF as Enter
-      if (c == '\r' || c == '\n') {
-        // If CR was received, eat a following LF if present
-        if (c == '\r' && Serial.peek() == '\n') {
-          Serial.read();
-        }
-        Serial.println();  // move to next line in monitor
-        done = true;
-        break;
-      }
-
-      // Handle backspace or delete
-      if (c == 8 || c == 127) {
-        if (input.length() > 0) {
-          input.remove(input.length() - 1);
-          // erase last char on terminal: backspace, space, backspace
-          Serial.write(8);
-          Serial.write(' ');
-          Serial.write(8);
-        }
-        continue;
-      }
-
-      // Normal printable character: append and echo
-      input += c;
-      Serial.write(c);
-    } else {
-      delay(10);
-    }
-  }
-
-  float pos_setpoint = input.toFloat();
-  Serial.printf("Setting position setpoint to %f\n", pos_setpoint);
-  odrv.setPosition(pos_setpoint);
 }
 
 void setup1() {
@@ -96,5 +81,5 @@ void setup1() {
 
 void loop1() {
   // Update filter
-  // FilterUpdate();
+  FilterUpdate();
 }

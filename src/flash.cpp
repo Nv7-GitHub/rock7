@@ -4,7 +4,7 @@
 
 #include "hardware.h"
 
-// Binary data structure (24 bytes per record)
+// Binary data structure (44 bytes per record)
 struct __attribute__((packed)) FlightRecord {
   uint32_t time_ms;
   float altitude_m;
@@ -12,6 +12,11 @@ struct __attribute__((packed)) FlightRecord {
   float accel_bias_ms2;
   float raw_accel_ms2;
   float raw_baro_m;
+  float motor_pos;
+  float motor_vel;
+  float roll_rad;
+  float pitch_rad;
+  float yaw_rad;
 };
 
 // RAM buffer for non-blocking writes
@@ -87,7 +92,8 @@ bool checkStorageWarning() {
 }
 
 void logFlightData(float altitude, float velocity, float accelBias,
-                   float rawAccel, float rawBaro) {
+                   float rawAccel, float rawBaro, float motorPos,
+                   float motorVel, float roll, float pitch, float yaw) {
   if (!dataFile) return;
 
   // Add to RAM buffer (non-blocking)
@@ -106,6 +112,11 @@ void logFlightData(float altitude, float velocity, float accelBias,
   writeBuffer[bufferHead].accel_bias_ms2 = accelBias;
   writeBuffer[bufferHead].raw_accel_ms2 = rawAccel;
   writeBuffer[bufferHead].raw_baro_m = rawBaro;
+  writeBuffer[bufferHead].motor_pos = motorPos;
+  writeBuffer[bufferHead].motor_vel = motorVel;
+  writeBuffer[bufferHead].roll_rad = roll;
+  writeBuffer[bufferHead].pitch_rad = pitch;
+  writeBuffer[bufferHead].yaw_rad = yaw;
 
   bufferHead = nextHead;
 }

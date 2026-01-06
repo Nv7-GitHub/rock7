@@ -287,3 +287,19 @@ void FilterUpdate() {
     Serial.printf("Loop time: %lu us\n", deltmicros);
   }
 }
+
+// Extract roll, pitch, yaw from C matrix (Direction Cosine Matrix)
+void GetOrientation(float* roll, float* pitch, float* yaw) {
+  // Extract Euler angles from rotation matrix C
+  // Using ZYX (yaw-pitch-roll) convention
+  // C is body-to-global, so we need to extract angles from the transpose
+
+  // pitch = asin(-C[2][0])
+  *pitch = asinf(-C[2][0]);
+
+  // roll = atan2(C[2][1], C[2][2])
+  *roll = atan2f(C[2][1], C[2][2]);
+
+  // yaw = atan2(C[1][0], C[0][0])
+  *yaw = atan2f(C[1][0], C[0][0]);
+}
