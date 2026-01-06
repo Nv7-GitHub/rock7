@@ -27,7 +27,7 @@ float hpBias = 0.0f;
 float aBias[3] = {0.0f, 0.0f, 0.0f};
 
 // Gyro bias handling, note: run hp.startConversion() before
-void BiasUpdate() {
+float BiasUpdate() {
   unsigned long start = micros();
   ReadIMU();
   float g[3];
@@ -55,6 +55,9 @@ void BiasUpdate() {
   mpu.getAccel(a[0], a[1], a[2]);
   a[2] *= scale_aZ;  // Scale correction
 
+  float aMag;
+  vectorLength(&aMag, a);
+
   // Subtract gravity from accel vector, in direction of magnitude
   float accNorm[3];
   copyVector(accNorm, a);
@@ -73,6 +76,9 @@ void BiasUpdate() {
   } else {
     Serial.println("ERROR: BIAS LOOP OVERRUN");
   }
+
+  // Return magnitude of accel vector for launch detect
+  return aMag;
 }
 
 // Initializes orientation matrix to follow gravity vector
