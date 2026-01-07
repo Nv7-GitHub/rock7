@@ -14,10 +14,11 @@ Color codes:
 
 uint32_t lastNonIdleTime = 0;
 void stateUpdate() {
+  float roll, pitch, yaw, prog;
   switch (currentState) {
     case STATE_IDLE:
       // Estimator update handles it all, just show color
-      float prog = (millis() - lastNonIdleTime) / 10000.0f;
+      prog = (millis() - lastNonIdleTime) / 10000.0f;
       // LED indicator: yellow if low storage, green otherwise
       if (checkStorageWarning()) {
         ledWrite(0.1, 0.1, 0.0);  // Yellow warning
@@ -30,13 +31,12 @@ void stateUpdate() {
     case STATE_PAD:
       if (millis() - lastNonIdleTime < 100) {
         // During potential launch, fade to solid red
-        float prog = (millis() - lastNonIdleTime) / 100.0f;
+        prog = (millis() - lastNonIdleTime) / 100.0f;
         ledWrite(prog, 0.0, 0.0);
         debugPrintf("STATE: PAD (LAUNCH WINDOW)\n");
         // Check for launch, after 50ms cuz don't want any transients
         if (millis() - lastNonIdleTime > 50) {
-          if (x[1] > 5.0f && rawSensorData[0] > 30.0f) {
-            // Launch detected: >5m/s, 3G, TODO: tune this
+          if (x[1] > LAUNCH_VEL && rawSensorData[0] > LAUNCH_ACCEL) {
             currentState = STATE_BOOST;
           }
         }
@@ -51,14 +51,13 @@ void stateUpdate() {
       debugPrintf("STATE: BOOST\n");
 
       // Get orientation from C matrix
-      float roll, pitch, yaw;
       GetOrientation(&roll, &pitch, &yaw);
       // Log all data including motor position/velocity and orientation
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
                     motorpos, motorvel, roll, pitch, yaw);
 
       // See if time for control (look at vertical vel)
-      if (x[1] < 60.0f) {  // TODO: Tune this
+      if (x[1] < VEL_CONTROL_START) {
         currentState = STATE_CONTROL;
       }
       break;
@@ -67,7 +66,6 @@ void stateUpdate() {
       ledWrite(1.0, 1.0, 0.0);  // Solid yellow
       debugPrintf("STATE: CONTROL\n");
 
-      float roll, pitch, yaw;
       GetOrientation(&roll, &pitch, &yaw);
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
                     motorpos, motorvel, roll, pitch, yaw);
@@ -83,7 +81,6 @@ void stateUpdate() {
     case STATE_DESCENT:
       ledWrite(1.0, 1.0, 1.0);  // Solid white
       debugPrintf("STATE: DESCENT\n");
-      float roll, pitch, yaw;
       GetOrientation(&roll, &pitch, &yaw);
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
                     motorpos, motorvel, roll, pitch, yaw);
@@ -128,7 +125,7 @@ void estimatorUpdate() {
       }
       break;
 
-    case STATE_PAD:
+    case STATE_PAD: {
       // Update filter during hypothetical launch window instead of bias
       // calibrating
       if (millis() - lastNonIdleTime < 100) {
@@ -147,6 +144,7 @@ void estimatorUpdate() {
         FilterReset();
       }
       break;
+    }
 
     case STATE_BOOST:
     case STATE_CONTROL:

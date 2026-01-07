@@ -11,6 +11,8 @@
 #include <SPI.h>
 #include <stdint.h>
 
+#include "config.h"
+
 class Mpu6x00 {
  public:
   typedef enum {
@@ -221,8 +223,8 @@ class Mpu6x00 {
 
     // accel full-scale values in g for each enum entry
     float ascale[] = {2.0f, 4.0f, 8.0f, 16.0f};
-    // convert to m/s^2: (g) / 32768 * 9.80665
-    m_accelScale = (ascale[accelFsr] / 32768.0f) * 9.80665f;
+    // convert to m/s^2: (g) / 32768 * G
+    m_accelScale = (ascale[accelFsr] / 32768.0f) * G;
   }
 
   void writeRegister(const uint8_t reg, const uint8_t val) {

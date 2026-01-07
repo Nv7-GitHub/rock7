@@ -62,7 +62,7 @@ float BiasUpdate() {
   float accNorm[3];
   copyVector(accNorm, a);
   normalizeVector(accNorm);
-  scaleVector(accNorm, 9.80665f, accNorm);
+  scaleVector(accNorm, G, accNorm);
   subtractVectors(a, a, accNorm);
   // Also negative for same reason as gyro
   aBias[0] = (1.0f - alpha) * aBias[0] - alpha * a[0];
@@ -176,7 +176,7 @@ void GetGlobalAccel() {
   matrixDotVector3x3(aGlob, C, aBody);
 
   // Subtract gravity
-  aGlob[2] -= 9.80665f;
+  aGlob[2] -= G;
 }
 
 // Kalman filter state
@@ -221,9 +221,10 @@ void FilterReset() {
   }
 
   // Initial coefficient of drag
-  Cd = 0.5f;  // TODO: Precise number
+  Cd = BASE_CD;
 }
 
+const float alpha_cd = 0.112f;  // 10 Hz cutoff @ 500 Hz looprate
 void FilterUpdate() {
   // Timing
   unsigned long start = micros();
@@ -283,6 +284,10 @@ void FilterUpdate() {
   }
 
   rawSensorData[0] = aGlob[2];  // For flight data
+
+  // Update Cd with low-pass
+  float currCd = -(2.0f * MASS * (aGlob[2] + G)) / (rhoA * x[1] * fabsf(x[1]));
+  Cd = (1.0f - alpha_cd) * Cd + alpha_cd * currCd;
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
