@@ -2,9 +2,9 @@
 
 #include <LittleFS.h>
 
-#include "hardware.h"
+#include "estimator.h"
 
-// Binary data structure (44 bytes per record)
+// Binary data structure (48 bytes per record)
 struct __attribute__((packed)) FlightRecord {
   uint32_t time_ms;
   float altitude_m;
@@ -17,6 +17,7 @@ struct __attribute__((packed)) FlightRecord {
   float roll_rad;
   float pitch_rad;
   float yaw_rad;
+  float Cd;
 };
 
 // RAM buffer for non-blocking writes
@@ -35,11 +36,16 @@ static bool lowStorageWarningActive = false;
 #define LOW_STORAGE_THRESHOLD (4 * 1024 * 1024)  // 4MB
 #define WARNING_DURATION 10000                   // 10 seconds
 
+static bool fsInitialized = false;  // Track if filesystem is mounted
+
 void initFlash() {
-  // Mount filesystem
-  if (!LittleFS.begin()) {
-    Serial.println("Failed to mount filesystem");
-    return;
+  // Mount filesystem if not already mounted
+  if (!fsInitialized) {
+    if (!LittleFS.begin()) {
+      Serial.println("Failed to mount filesystem");
+      return;
+    }
+    fsInitialized = true;
   }
 
   // Check storage
@@ -74,7 +80,8 @@ void initFlash() {
   if (dataFile) {
     Serial.print("Logging to: ");
     Serial.println(filename);
-    logStartTime = millis();
+    // logStartTime will be set when first log entry is made (STATE_BOOST)
+    logStartTime = 0;
   } else {
     Serial.println("Failed to open file for writing");
   }
@@ -93,8 +100,24 @@ bool checkStorageWarning() {
 
 void logFlightData(float altitude, float velocity, float accelBias,
                    float rawAccel, float rawBaro, float motorPos,
-                   float motorVel, float roll, float pitch, float yaw) {
+                   float motorVel, float roll, float pitch, float yaw,
+                   float Cd) {
   if (!dataFile) return;
+
+  // Rate limit to 100Hz
+  static uint32_t lastLogTime = 0;
+  if (millis() - lastLogTime < 10) {  // 100Hz = 10ms period
+    return;
+  }
+  lastLogTime = millis();
+
+  // Set log start time on first actual log entry (when STATE_BOOST starts)
+  if (logStartTime == 0) {
+    logStartTime = millis();
+  }
+
+  // Get orientation at 100Hz instead of every loop iteration
+  GetOrientation(&roll, &pitch, &yaw);
 
   // Add to RAM buffer (non-blocking)
   int nextHead = (bufferHead + 1) % BUFFER_SIZE;
@@ -117,6 +140,7 @@ void logFlightData(float altitude, float velocity, float accelBias,
   writeBuffer[bufferHead].roll_rad = roll;
   writeBuffer[bufferHead].pitch_rad = pitch;
   writeBuffer[bufferHead].yaw_rad = yaw;
+  writeBuffer[bufferHead].Cd = Cd;
 
   bufferHead = nextHead;
 }
@@ -135,6 +159,16 @@ void flushLogBuffer() {
 }
 
 void handleFlashCommands() {
+  // Early return if filesystem not mounted yet
+  if (!fsInitialized) {
+    // Try to mount filesystem (won't create files, just mount)
+    if (LittleFS.begin()) {
+      fsInitialized = true;
+    } else {
+      return;  // Filesystem not ready, skip command processing
+    }
+  }
+
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {

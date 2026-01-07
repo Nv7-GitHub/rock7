@@ -11,8 +11,7 @@ void setup() {
 
   setupHardware();
 
-  // Initialize flash logging
-  initFlash();
+  // Flash logging will be initialized when entering STATE_PAD
 
   // Indicate setup done
   sem_release(&setup_done);

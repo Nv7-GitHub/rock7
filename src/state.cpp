@@ -14,7 +14,7 @@ Color codes:
 
 uint32_t lastNonIdleTime = 0;
 void stateUpdate() {
-  float roll, pitch, yaw, prog;
+  float prog;
   switch (currentState) {
     case STATE_IDLE:
       // Estimator update handles it all, just show color
@@ -50,11 +50,9 @@ void stateUpdate() {
       ledWrite(1.0, 0.0, 0.0);  // Solid red
       debugPrintf("STATE: BOOST\n");
 
-      // Get orientation from C matrix
-      GetOrientation(&roll, &pitch, &yaw);
-      // Log all data including motor position/velocity and orientation
+      // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, roll, pitch, yaw);
+                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
 
       // See if time for control (look at vertical vel)
       if (x[1] < VEL_CONTROL_START) {
@@ -66,9 +64,9 @@ void stateUpdate() {
       ledWrite(1.0, 1.0, 0.0);  // Solid yellow
       debugPrintf("STATE: CONTROL\n");
 
-      GetOrientation(&roll, &pitch, &yaw);
+      // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, roll, pitch, yaw);
+                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
 
       controlUpdate();
 
@@ -81,9 +79,9 @@ void stateUpdate() {
     case STATE_DESCENT:
       ledWrite(1.0, 1.0, 1.0);  // Solid white
       debugPrintf("STATE: DESCENT\n");
-      GetOrientation(&roll, &pitch, &yaw);
+      // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, roll, pitch, yaw);
+                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
       odrv.setPosition(0.0);  // Closed
 
       if (x[0] < 3.0f && fabsf(x[1]) < 4.0f) {
@@ -120,6 +118,7 @@ void estimatorUpdate() {
       if (millis() - lastNonIdleTime > 10000) {
         // Idle vertical for 10s, go to PAD state
         currentState = STATE_PAD;
+        initFlash();           // Initialize flight data file
         hp.startConversion();  // For bias calibration
         lastNonIdleTime = 0;   // Reset for bias calibration
       }
