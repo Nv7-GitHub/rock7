@@ -8,3 +8,5 @@
 
 .venv
 flight_data/*
+
+sim/slprj/*
