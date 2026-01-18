@@ -224,7 +224,7 @@ void FilterReset() {
   Cd = BASE_CD;
 }
 
-const float alpha_cd = 0.112f;  // 10 Hz cutoff @ 500 Hz looprate
+const float alpha_cd = 0.05f;  // 4.2 Hz cutoff @ 500 Hz looprate
 void FilterUpdate() {
   // Timing
   unsigned long start = micros();
