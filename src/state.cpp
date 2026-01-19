@@ -52,7 +52,7 @@ void stateUpdate() {
 
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
+                    motorpos, motorvel, Cd);
 
       // See if time for control (look at vertical vel)
       if (x[1] < VEL_CONTROL_START) {
@@ -66,12 +66,12 @@ void stateUpdate() {
 
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
+                    motorpos, motorvel, Cd);
 
       controlUpdate();
 
       // See if apogee reached (vel < -0.5m/s)
-      if (x[1] < -0.5f) {
+      if (x[1] < VEL_DESCENT) {
         currentState = STATE_DESCENT;
       }
       break;
@@ -81,11 +81,10 @@ void stateUpdate() {
       debugPrintf("STATE: DESCENT\n");
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawSensorData[1],
-                    motorpos, motorvel, 0.0f, 0.0f, 0.0f, Cd);
+                    motorpos, motorvel, Cd);
       odrv.setPosition(0.0);  // Closed
 
-      if (x[0] < 3.0f && fabsf(x[1]) < 4.0f) {
-        // Alt <3m, vel <4m/s, consider landed
+      if (x[0] < ALT_LANDED && fabsf(x[1]) < VEL_LANDED) {
         currentState = STATE_LANDED;
         // Flush log buffer
         flushLogBuffer();

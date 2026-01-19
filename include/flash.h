@@ -6,8 +6,7 @@
 void initFlash();
 void logFlightData(float altitude, float velocity, float accelBias,
                    float rawAccel, float rawBaro, float motorPos,
-                   float motorVel, float roll, float pitch, float yaw,
-                   float Cd);
+                   float motorVel, float Cd);
 void flushLogBuffer();  // Flush RAM buffer to flash
 void handleFlashCommands();
 bool checkStorageWarning();  // Returns true if low storage warning is active

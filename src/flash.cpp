@@ -100,8 +100,7 @@ bool checkStorageWarning() {
 
 void logFlightData(float altitude, float velocity, float accelBias,
                    float rawAccel, float rawBaro, float motorPos,
-                   float motorVel, float roll, float pitch, float yaw,
-                   float Cd) {
+                   float motorVel, float Cd) {
   if (!dataFile) return;
 
   // Rate limit to 100Hz
@@ -117,6 +116,7 @@ void logFlightData(float altitude, float velocity, float accelBias,
   }
 
   // Get orientation at 100Hz instead of every loop iteration
+  float roll, pitch, yaw;
   GetOrientation(&roll, &pitch, &yaw);
 
   // Add to RAM buffer (non-blocking)
