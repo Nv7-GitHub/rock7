@@ -3,8 +3,9 @@
 #include <LittleFS.h>
 
 #include "estimator.h"
+#include "state.h"
 
-// Binary data structure (48 bytes per record)
+// Binary data structure (52 bytes per record)
 struct __attribute__((packed)) FlightRecord {
   uint32_t time_ms;
   float altitude_m;
@@ -18,6 +19,7 @@ struct __attribute__((packed)) FlightRecord {
   float pitch_rad;
   float yaw_rad;
   float Cd;
+  uint32_t state;
 };
 
 // RAM buffer for non-blocking writes
@@ -65,7 +67,7 @@ void initFlash() {
     lowStorageWarningStart = millis();
   }
 
-  // Find next available flight number
+  // Find next available flight number (but don't create file yet)
   while (true) {
     String filename = "/flight_" + String(flightNumber) + ".bin";
     if (!LittleFS.exists(filename)) {
@@ -74,17 +76,11 @@ void initFlash() {
     flightNumber++;
   }
 
-  String filename = "/flight_" + String(flightNumber) + ".bin";
-  dataFile = LittleFS.open(filename, "w");
-
-  if (dataFile) {
-    Serial.print("Logging to: ");
-    Serial.println(filename);
-    // logStartTime will be set when first log entry is made (STATE_BOOST)
-    logStartTime = 0;
-  } else {
-    Serial.println("Failed to open file for writing");
-  }
+  Serial.print("Ready to log flight ");
+  Serial.println(flightNumber);
+  // File will be created on first log entry (when STATE_BOOST/CONTROL/DESCENT
+  // starts)
+  logStartTime = 0;
 }
 
 bool checkStorageWarning() {
@@ -101,7 +97,21 @@ bool checkStorageWarning() {
 void logFlightData(float altitude, float velocity, float accelBias,
                    float rawAccel, float rawBaro, float motorPos,
                    float motorVel, float Cd) {
-  if (!dataFile) return;
+  // Create file on first log entry (lazy initialization)
+  if (!dataFile) {
+    if (!fsInitialized) return;  // Filesystem not ready
+
+    String filename = "/flight_" + String(flightNumber) + ".bin";
+    dataFile = LittleFS.open(filename, "w");
+
+    if (dataFile) {
+      Serial.print("Started logging to: ");
+      Serial.println(filename);
+    } else {
+      Serial.println("Failed to open file for writing");
+      return;
+    }
+  }
 
   // Rate limit to 100Hz
   static uint32_t lastLogTime = 0;
@@ -141,6 +151,7 @@ void logFlightData(float altitude, float velocity, float accelBias,
   writeBuffer[bufferHead].pitch_rad = pitch;
   writeBuffer[bufferHead].yaw_rad = yaw;
   writeBuffer[bufferHead].Cd = Cd;
+  writeBuffer[bufferHead].state = (uint32_t)currentState;
 
   bufferHead = nextHead;
 }

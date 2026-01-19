@@ -8,6 +8,7 @@ void FilterReset();
 void FilterUpdate();
 float BiasUpdate();
 void GetOrientation(float* roll, float* pitch, float* yaw);
+void ReadIMU();
 
 extern float aGlob[3];
 extern float x[3];

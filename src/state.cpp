@@ -106,6 +106,7 @@ void stateInit() {
 void estimatorUpdate() {
   switch (currentState) {
     case STATE_IDLE:
+      ReadIMU();
       float aZ;
       float tmp;
       mpu.getAccel(tmp, tmp, aZ);  // Read Z accel
