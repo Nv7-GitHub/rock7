@@ -1,5 +1,5 @@
 #include "control.h"
 
 void controlUpdate() {
-  // TODO: Implement control logic
+  odrv.setPosition(24.0f);  // FULL DEPLOYMENT!
 }
