@@ -55,7 +55,7 @@ void stateUpdate() {
                     motorpos, motorvel, Cd);
 
       // See if time for control (look at vertical vel)
-      if (x[1] < VEL_CONTROL_START) {
+      if (x[1] < VEL_CONTROL_START && x[0] > ALT_LANDED) {
         currentState = STATE_CONTROL;
       }
       break;
