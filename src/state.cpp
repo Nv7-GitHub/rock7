@@ -70,7 +70,7 @@ void stateUpdate() {
 
       controlUpdate();
 
-      // See if apogee reached (vel < -0.5m/s)
+      // See if apogee reached
       if (x[1] < VEL_DESCENT) {
         currentState = STATE_DESCENT;
       }

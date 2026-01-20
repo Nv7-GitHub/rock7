@@ -4,14 +4,14 @@
 #include "math.h"
 
 // Changes
-#define MASS 0.62f               // kg
+#define MASS 0.586f              // kg
 #define BASE_CD 0.44f            // From OpenRocket
 #define LAUNCH_ACCEL 30.0f       // m/s^2, acceleration at launch detection
-#define LAUNCH_VEL 5.0f          // m/s, velocity at launch detection
-#define VEL_CONTROL_START 60.0f  // m/s, vel drops below this to start control
-#define VEL_DESCENT -0.5f        // m/s, vel drops below this to go to DESCENT
-#define ALT_LANDED 3.0f          // m, alt below this to consider landed
-#define VEL_LANDED 4.0f          // m/s, abs(vel) below this to consider landed
+#define LAUNCH_VEL 2.0f          // m/s, velocity at launch detection (real: 8)
+#define VEL_CONTROL_START 30.0f  // m/s, vel drops below this to start control
+#define VEL_DESCENT -1.0f        // m/s, vel drops below this to go to DESCENT
+#define ALT_LANDED 2.0f          // m, alt below this to consider landed
+#define VEL_LANDED 1.0f          // m/s, abs(vel) below this to consider landed
 
 // Constants
 #define AREA (M_PI * (6.6f / 100.0f) * (6.6f / 100.0f)) / 4.0f  // m^2

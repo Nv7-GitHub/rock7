@@ -256,9 +256,9 @@ void FilterUpdate() {
     hp.readAllData();
     hp.startConversion();
 
-    // Only do Kalman update during coast phase, high accel (3G) or vel (30m/s)
+    // Only do Kalman update during coast phase, high accel (3G) or vel (40m/s)
     // make it unreliable
-    if (fabsf(aGlob[2]) < 30.0f && fabsf(x[1]) < 30.0f) {
+    if (fabsf(aGlob[2]) < 30.0f && fabsf(x[1]) < 40.0f) {
       // Kalman update step
       float z = hp.hp_sensorData.A - hpBias;
       float y = z - x[0];  // innovation
