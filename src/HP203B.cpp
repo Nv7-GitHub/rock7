@@ -58,15 +58,29 @@ static void writeRegister(uint8_t i2cAddress, uint8_t reg) {
 /**************************************************************************/
 /*
     Reads 24-bits from the specified destination register
+    Returns a 20-bit signed value (bits 19-0)
 */
 /**************************************************************************/
-static uint32_t readRegister(uint8_t i2cAddress, uint8_t reg) {
+static int32_t readRegister(uint8_t i2cAddress, uint8_t reg) {
   Wire.beginTransmission(i2cAddress);
   i2cwrite((uint8_t)reg);
   Wire.endTransmission();
   Wire.requestFrom(i2cAddress, (uint8_t)3);
-  return (uint32_t)((int32_t)i2cread() << 16) | ((int32_t)i2cread() << 8) |
-         i2cread();
+
+  // Read 3 bytes and combine into 20-bit value
+  uint32_t rawValue =
+      ((uint32_t)i2cread() << 16) | ((uint32_t)i2cread() << 8) | i2cread();
+
+  // HP203B returns 20-bit signed data in bits [19:0]
+  // Extract the 20-bit value and sign extend to 32-bit
+  int32_t value = rawValue & 0xFFFFF;  // Mask to 20 bits
+
+  // Sign extend: if bit 19 is set, extend the sign
+  if (value & 0x80000) {
+    value |= 0xFFF00000;  // Set upper 12 bits to 1 for negative numbers
+  }
+
+  return value;
 }
 
 /**************************************************************************/
@@ -186,15 +200,15 @@ uint8_t HP203B::getConversionDelay(void) { return hp_conversionDelay; }
 */
 /**************************************************************************/
 void HP203B::readAllData(void) {
-  // Read pressure
-  uint32_t pressure = readRegister(hp_i2cAddress, HP203B_CMD_READ_P);
+  // Read pressure (20-bit signed value)
+  int32_t pressure = readRegister(hp_i2cAddress, HP203B_CMD_READ_P);
   hp_sensorData.P = pressure / 100.0;
 
-  // Read altitude
-  uint32_t altitude = readRegister(hp_i2cAddress, HP203B_CMD_READ_A);
+  // Read altitude (20-bit signed value)
+  int32_t altitude = readRegister(hp_i2cAddress, HP203B_CMD_READ_A);
   hp_sensorData.A = altitude / 100.0;
 
-  // Read temperature
-  uint32_t temperature = readRegister(hp_i2cAddress, HP203B_CMD_READ_T);
+  // Read temperature (20-bit signed value)
+  int32_t temperature = readRegister(hp_i2cAddress, HP203B_CMD_READ_T);
   hp_sensorData.T = temperature / 100.0;
 }

@@ -33,17 +33,17 @@ def send_command(ser, command):
     time.sleep(0.1)
 
 def get_current_flight(ser):
-    """Get the current active flight number"""
-    ser.reset_input_buffer()
-    send_command(ser, "CURRENT")
-    
-    timeout = time.time() + 2
-    while time.time() < timeout:
-        if ser.in_waiting:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
-            if line.startswith("FLASH:CURRENT:"):
+    """Get the current active flight number (only if actually logging)"""
+    # Use LIST command and check for [ACTIVE] marker
+    # This ensures we only consider a flight active if it's actually being written to
+    flights = list_flights(ser)
+    for flight in flights:
+        if "[ACTIVE]" in flight:
+            # Extract flight number from "flight_X.bin"
+            parts = flight.split("_")
+            if len(parts) >= 2:
                 try:
-                    return int(line.replace("FLASH:CURRENT:", "").strip())
+                    return int(parts[1].split(".")[0])
                 except ValueError:
                     pass
     return None

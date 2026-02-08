@@ -68,6 +68,7 @@ void initFlash() {
   }
 
   // Find next available flight number (but don't create file yet)
+  flightNumber = 0;  // Reset to 0 to enumerate from the beginning
   while (true) {
     String filename = "/flight_" + String(flightNumber) + ".bin";
     if (!LittleFS.exists(filename)) {
@@ -207,10 +208,12 @@ void handleFlashCommands() {
             }
             Serial.print(")");
 
-            // Mark if this is the current active flight
+            // Mark if this is the current active flight (only if file is
+            // actually open for logging)
             String currentFile = "flight_" + String(flightNumber) + ".bin";
-            if (dir.fileName() == currentFile ||
-                dir.fileName() == ("/" + currentFile)) {
+            if ((dir.fileName() == currentFile ||
+                 dir.fileName() == ("/" + currentFile)) &&
+                dataFile) {
               Serial.print(" [ACTIVE]");
             }
             Serial.println();
@@ -254,8 +257,9 @@ void handleFlashCommands() {
         }
       } else if (commandBuffer.startsWith("DELETE ")) {
         int flightNum = commandBuffer.substring(7).toInt();
-        // Don't delete the currently active flight
-        if (flightNum == flightNumber) {
+        // Don't delete the currently active flight (only if file is actually
+        // open for logging)
+        if (flightNum == flightNumber && dataFile) {
           Serial.println("FLASH:ERROR: Cannot delete active flight");
         } else {
           String filename = "/flight_" + String(flightNum) + ".bin";

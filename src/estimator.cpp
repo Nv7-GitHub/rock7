@@ -1,6 +1,7 @@
 #include "estimator.h"
 
 #include "algebra.h"
+#include "state.h"
 
 // Constants
 #define LOOPRATE 500  // Hz
@@ -47,6 +48,7 @@ float BiasUpdate() {
     } else {
       hpBias = 0.9f * hpBias + 0.1f * hp.hp_sensorData.A;
     }
+    debugPrintf("Baro: %.2f m, Bias: %.2f m\n", hp.hp_sensorData.A, hpBias);
     hp.startConversion();
   }
 
