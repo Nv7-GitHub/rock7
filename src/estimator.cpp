@@ -48,7 +48,6 @@ float BiasUpdate() {
     } else {
       hpBias = 0.9f * hpBias + 0.1f * hp.hp_sensorData.A;
     }
-    debugPrintf("Baro: %.2f m, Bias: %.2f m\n", hp.hp_sensorData.A, hpBias);
     hp.startConversion();
   }
 
@@ -186,6 +185,7 @@ float x[3];
 float P[3][3];
 float Cd;
 float rawSensorData[2] = {0.0f, 0.0f};
+float rawBaroData = 0.0f;  // Always-updated raw baro for logging
 
 // Kalman filter constants
 float A[3][3] = {
@@ -258,11 +258,14 @@ void FilterUpdate() {
     hp.readAllData();
     hp.startConversion();
 
+    // Always store raw data for logging
+    float z = hp.hp_sensorData.A - hpBias;
+    rawBaroData = z;
+
     // Only do Kalman update during coast phase, high accel (3G) or vel (40m/s)
     // make it unreliable
     if (fabsf(aGlob[2]) < 30.0f && fabsf(x[1]) < 40.0f) {
       // Kalman update step
-      float z = hp.hp_sensorData.A - hpBias;
       float y = z - x[0];  // innovation
       float S = P[0][0] + R;
       float K[3];  // Kalman gain

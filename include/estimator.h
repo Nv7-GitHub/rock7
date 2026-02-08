@@ -13,6 +13,7 @@ void ReadIMU();
 extern float aGlob[3];
 extern float x[3];
 extern float rawSensorData[2];
+extern float rawBaroData;
 extern float C[3][3];
 extern float Cd;
 
