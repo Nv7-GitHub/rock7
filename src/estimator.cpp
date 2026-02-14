@@ -9,9 +9,9 @@ const float dT = 1.0f / (float)LOOPRATE;
 
 // Experimentally calibrated z-accel data
 // const float sigma_aZ = 0.0332f;  // m/s^2, experimental
-const float sigma_aZ = 0.044f;   // m/s^2, calculated from datasheet
-const float sigma_bZ = 0.0014f;  // m/s^2 per sqrt(s), experimental
-const float sigma_x = 2.1f;      // m, experimental
+const float sigma_aZ = 0.044f;  // m/s^2, calculated from datasheet
+const float sigma_bZ = 0.003f;  // m/s^2 per sqrt(s), experimental
+const float sigma_x = 2.1f;     // m, experimental
 const float scale_aZ =
     1.0f /
     1.015f;  // Accelerometer scale factor, for some reason only z is scaled
