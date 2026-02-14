@@ -17,9 +17,15 @@ static inline void canCallback(int packet_size) {
 
 float motorvel;
 float motorpos;
+float motorcurrent;
+
 void odriveFeedback(Get_Encoder_Estimates_msg_t& msg, void* user_data) {
   motorpos = msg.Pos_Estimate;
   motorvel = msg.Vel_Estimate;
+}
+
+void odriveCurrents(Get_Iq_msg_t& msg, void* user_data) {
+  motorcurrent = msg.Iq_Setpoint;  // or msg.Iq_Measured for actual current
 }
 
 void odriveHeartbeat(Heartbeat_msg_t& msg, void* user_data) {
@@ -78,6 +84,7 @@ void setupHardware() {
   // CAN
   odrv.onFeedback(odriveFeedback, NULL);
   odrv.onStatus(odriveHeartbeat, NULL);
+  odrv.onCurrents(odriveCurrents, NULL);
 
   CAN.setPins(CAN_CS, CAN_INT);
   CAN.setClockFrequency(MCP2515_CLK_HZ);

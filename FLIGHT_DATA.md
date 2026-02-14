@@ -15,13 +15,13 @@ Simple flight data recording and download system for the Rock V7 flight computer
 
 ### On the Pico
 - Logs flight data at 100 Hz (every 10ms) to LittleFS filesystem
-- Stores data in **binary format** (56 bytes per record) for maximum efficiency
+- Stores data in **binary format** (60 bytes per record) for maximum efficiency
 - Creates sequential flight files: `flight_0.bin`, `flight_1.bin`, etc.
 - Each new power-up creates a new flight file (no overwriting)
-- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro, motor position/velocity, roll/pitch/yaw, drag coefficient, state, ODrive axis errors
+- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro, motor position/velocity, roll/pitch/yaw, drag coefficient, motor current, state, ODrive axis errors
 
 ### Binary Format
-Each record is 56 bytes:
+Each record is 60 bytes:
 - `time_ms` (4 bytes, uint32)
 - `altitude_m` (4 bytes, float)
 - `velocity_ms` (4 bytes, float)
@@ -34,15 +34,16 @@ Each record is 56 bytes:
 - `pitch_rad` (4 bytes, float)
 - `yaw_rad` (4 bytes, float)
 - `Cd` (4 bytes, float)
+- `motor_current` (4 bytes, float)
 - `state` (4 bytes, uint32)
 - `axis_error` (4 bytes, uint32)
 
-**Storage Efficiency:** Binary is ~65% smaller than CSV (56 bytes vs 120-150 bytes per record)
+**Storage Efficiency:** Binary is ~65% smaller than CSV (60 bytes vs 120-150 bytes per record)
 
 ### CSV Output
 Python tool automatically converts binary to CSV with columns:
 ```
-time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,state,axis_error
+time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,motor_current_A,state,axis_error
 ```
 
 ## Usage

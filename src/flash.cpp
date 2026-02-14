@@ -5,7 +5,7 @@
 #include "estimator.h"
 #include "state.h"
 
-// Binary data structure (56 bytes per record)
+// Binary data structure (60 bytes per record)
 struct __attribute__((packed)) FlightRecord {
   uint32_t time_ms;
   float altitude_m;
@@ -19,12 +19,13 @@ struct __attribute__((packed)) FlightRecord {
   float pitch_rad;
   float yaw_rad;
   float Cd;
+  float motor_current;
   uint32_t state;
   uint32_t axis_error;
 };
 
 // RAM buffer for non-blocking writes
-#define BUFFER_SIZE 768  // 768 records = 42KB buffer (~7.7 seconds at 100Hz)
+#define BUFFER_SIZE 768  // 768 records = 46KB buffer (~7.7 seconds at 100Hz)
 static FlightRecord writeBuffer[BUFFER_SIZE];
 static volatile int bufferHead = 0;
 static volatile int bufferTail = 0;
@@ -98,7 +99,8 @@ bool checkStorageWarning() {
 
 void logFlightData(float altitude, float velocity, float accelBias,
                    float rawAccel, float rawBaro, float motorPos,
-                   float motorVel, float Cd, uint32_t axisError) {
+                   float motorVel, float Cd, float motorCurrent,
+                   uint32_t axisError) {
   // Create file on first log entry (lazy initialization)
   if (!dataFile) {
     if (!fsInitialized) return;  // Filesystem not ready
@@ -153,6 +155,7 @@ void logFlightData(float altitude, float velocity, float accelBias,
   writeBuffer[bufferHead].pitch_rad = pitch;
   writeBuffer[bufferHead].yaw_rad = yaw;
   writeBuffer[bufferHead].Cd = Cd;
+  writeBuffer[bufferHead].motor_current = motorCurrent;
   writeBuffer[bufferHead].state = (uint32_t)currentState;
   writeBuffer[bufferHead].axis_error = axisError;
 

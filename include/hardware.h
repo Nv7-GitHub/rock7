@@ -32,6 +32,7 @@ extern Mpu6500 mpu;
 extern ODriveCAN odrv;
 extern float motorvel;
 extern float motorpos;
+extern float motorcurrent;
 extern uint32_t axisError;
 
 extern void ledWrite(float r, float g, float b);
