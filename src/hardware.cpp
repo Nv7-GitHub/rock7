@@ -240,3 +240,19 @@ void EnableOdrv() {
     }
   }
 }
+
+uint32_t axisError = 0;
+
+void odrvPosition(float pos) {
+  odrv.setPosition(pos);
+  if (lastHeartbeat.Axis_State !=
+      ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
+    if (lastHeartbeat.Axis_State == ODriveAxisState::AXIS_STATE_IDLE &&
+        lastHeartbeat.Axis_Error != 0) {
+      axisError = lastHeartbeat.Axis_Error;
+    }
+    odrv.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+
+    return;
+  }
+}

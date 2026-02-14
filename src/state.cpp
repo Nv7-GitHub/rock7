@@ -52,7 +52,7 @@ void stateUpdate() {
 
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawBaroData, motorpos,
-                    motorvel, Cd);
+                    motorvel, Cd, axisError);
 
       // See if time for control (look at vertical vel)
       if (x[1] < VEL_CONTROL_START && x[0] > ALT_LANDED &&
@@ -67,7 +67,7 @@ void stateUpdate() {
 
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawBaroData, motorpos,
-                    motorvel, Cd);
+                    motorvel, Cd, axisError);
 
       controlUpdate();
 
@@ -82,8 +82,8 @@ void stateUpdate() {
       debugPrintf("STATE: DESCENT\n");
       // Log all data (GetOrientation called internally at 100Hz)
       logFlightData(x[0], x[1], x[2], rawSensorData[0], rawBaroData, motorpos,
-                    motorvel, Cd);
-      odrv.setPosition(0.0);  // Closed
+                    motorvel, Cd, axisError);
+      odrvPosition(0.0f);  // Closed
 
       if (x[0] < ALT_LANDED) {
         currentState = STATE_LANDED;

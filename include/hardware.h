@@ -32,9 +32,11 @@ extern Mpu6500 mpu;
 extern ODriveCAN odrv;
 extern float motorvel;
 extern float motorpos;
+extern uint32_t axisError;
 
 extern void ledWrite(float r, float g, float b);
 void setupHardware();
 void EnableOdrv();
+void odrvPosition(float pos);
 
 #endif  // HARDWARE_H

@@ -4,6 +4,7 @@
 #include "control.h"
 #include "estimator.h"
 #include "flash.h"
+#include "hardware.h"
 
 typedef enum State {
   STATE_IDLE,  // Initial state

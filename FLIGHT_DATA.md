@@ -14,27 +14,35 @@ Simple flight data recording and download system for the Rock V7 flight computer
 ## How It Works
 
 ### On the Pico
-- Logs flight data at 50 Hz (every 20ms) to LittleFS filesystem
-- Stores data in **binary format** (24 bytes per record) for maximum efficiency
+- Logs flight data at 100 Hz (every 10ms) to LittleFS filesystem
+- Stores data in **binary format** (56 bytes per record) for maximum efficiency
 - Creates sequential flight files: `flight_0.bin`, `flight_1.bin`, etc.
 - Each new power-up creates a new flight file (no overwriting)
-- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro
+- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro, motor position/velocity, roll/pitch/yaw, drag coefficient, state, ODrive axis errors
 
 ### Binary Format
-Each record is 24 bytes:
+Each record is 56 bytes:
 - `time_ms` (4 bytes, uint32)
 - `altitude_m` (4 bytes, float)
 - `velocity_ms` (4 bytes, float)
 - `accel_bias_ms2` (4 bytes, float)
 - `raw_accel_ms2` (4 bytes, float)
 - `raw_baro_m` (4 bytes, float)
+- `motor_pos` (4 bytes, float)
+- `motor_vel` (4 bytes, float)
+- `roll_rad` (4 bytes, float)
+- `pitch_rad` (4 bytes, float)
+- `yaw_rad` (4 bytes, float)
+- `Cd` (4 bytes, float)
+- `state` (4 bytes, uint32)
+- `axis_error` (4 bytes, uint32)
 
-**Storage Efficiency:** Binary is ~60% smaller than CSV (24 bytes vs 50-60 bytes per record)
+**Storage Efficiency:** Binary is ~65% smaller than CSV (56 bytes vs 120-150 bytes per record)
 
 ### CSV Output
 Python tool automatically converts binary to CSV with columns:
 ```
-time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m
+time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,state,axis_error
 ```
 
 ## Usage
@@ -93,9 +101,9 @@ pip install pyserial
 ## Storage Capacity
 
 With ~15MB LittleFS and binary format:
-- At 50 Hz with 24 bytes/record = 1,200 bytes/sec
-- **~12,800 seconds = ~3.5 hours per 15MB**
-- Each 10 minute flight = ~720 KB
-- **Can store ~20 full 10-minute flights**
+- At 100 Hz with 56 bytes/record = 5,600 bytes/sec
+- **~2,700 seconds = ~45 minutes per 15MB**
+- Each 10 minute flight = ~3.36 MB
+- **Can store ~4 full 10-minute flights**
 
-**60% more efficient than CSV storage!**
+**65% more efficient than CSV storage!**

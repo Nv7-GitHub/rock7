@@ -12,10 +12,10 @@ import time
 import struct
 from datetime import datetime
 
-# Binary record format: 52 bytes per record
-# Format: uint32_t time_ms, 11 floats (altitude, velocity, accel_bias, raw_accel, raw_baro, motor_pos, motor_vel, roll, pitch, yaw, Cd), uint32_t state
-RECORD_FORMAT = '<I11fI'
-RECORD_SIZE = 52
+# Binary record format: 56 bytes per record
+# Format: uint32_t time_ms, 11 floats (altitude, velocity, accel_bias, raw_accel, raw_baro, motor_pos, motor_vel, roll, pitch, yaw, Cd), uint32_t state, uint32_t axis_error
+RECORD_FORMAT = '<I11fII'
+RECORD_SIZE = 56
 
 def find_pico():
     """Find the Pico serial port"""
@@ -117,7 +117,7 @@ def download_flight(ser, flight_num, output_dir="flight_data", auto_delete=False
     state_names = ['IDLE', 'PAD', 'BOOST', 'CONTROL', 'DESCENT', 'LANDED']
     
     with open(output_file, 'w') as f:
-        f.write("time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,state\n")
+        f.write("time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,state,axis_error\n")
         
         for i in range(num_records):
             offset = i * RECORD_SIZE
@@ -127,9 +127,9 @@ def download_flight(ser, flight_num, output_dir="flight_data", auto_delete=False
                 break
             
             try:
-                time_ms, alt, vel, bias, raw_accel, raw_baro, motor_pos, motor_vel, roll, pitch, yaw, Cd, state_val = struct.unpack(RECORD_FORMAT, record_bytes)
+                time_ms, alt, vel, bias, raw_accel, raw_baro, motor_pos, motor_vel, roll, pitch, yaw, Cd, state_val, axis_error = struct.unpack(RECORD_FORMAT, record_bytes)
                 state_name = state_names[state_val] if state_val < len(state_names) else f'UNKNOWN({state_val})'
-                f.write(f"{time_ms},{alt:.4f},{vel:.4f},{bias:.4f},{raw_accel:.4f},{raw_baro:.4f},{motor_pos:.4f},{motor_vel:.4f},{roll:.4f},{pitch:.4f},{yaw:.4f},{Cd:.4f},{state_name}\n")
+                f.write(f"{time_ms},{alt:.4f},{vel:.4f},{bias:.4f},{raw_accel:.4f},{raw_baro:.4f},{motor_pos:.4f},{motor_vel:.4f},{roll:.4f},{pitch:.4f},{yaw:.4f},{Cd:.4f},{state_name},{axis_error}\n")
             except struct.error:
                 print(f"Warning: Corrupt record at offset {offset}")
                 continue

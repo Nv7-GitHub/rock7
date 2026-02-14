@@ -4,7 +4,7 @@
 #include "math.h"
 
 // Changes
-#define MASS 0.618f         // kg
+#define MASS 0.603f         // kg
 #define BASE_CD 0.44f       // From OpenRocket
 #define LAUNCH_ACCEL 30.0f  // m/s^2, acceleration at launch detection
 #define LAUNCH_VEL 1.0f     // m/s, velocity at launch detection (real: 4.5)
