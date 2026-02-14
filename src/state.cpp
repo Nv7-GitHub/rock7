@@ -85,7 +85,7 @@ void stateUpdate() {
                     motorvel, Cd);
       odrv.setPosition(0.0);  // Closed
 
-      if (x[0] < ALT_LANDED && fabsf(x[1]) < VEL_LANDED) {
+      if (x[0] < ALT_LANDED) {
         currentState = STATE_LANDED;
         // Flush log buffer
         flushLogBuffer();
