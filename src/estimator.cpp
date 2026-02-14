@@ -262,9 +262,9 @@ void FilterUpdate() {
     float z = hp.hp_sensorData.A - hpBias;
     rawBaroData = z;
 
-    // Only do Kalman update during coast phase, high accel (3G) or vel (40m/s)
+    // Only do Kalman update during coast phase, high accel (4G) or vel (50m/s)
     // make it unreliable
-    if (fabsf(aGlob[2]) < 30.0f && fabsf(x[1]) < 40.0f) {
+    if (fabsf(aGlob[2]) < (4 * G) && fabsf(x[1]) < 50.0f) {
       // Kalman update step
       float y = z - x[0];  // innovation
       float S = P[0][0] + R;
@@ -290,9 +290,12 @@ void FilterUpdate() {
 
   rawSensorData[0] = aGlob[2];  // For flight data
 
-  // Update Cd with low-pass
-  float currCd = -(2.0f * MASS * (aGlob[2] + G)) / (rhoA * x[1] * fabsf(x[1]));
-  Cd = (1.0f - alpha_cd) * Cd + alpha_cd * currCd;
+  // Update Cd with low-pass only when motor is not burning
+  if (aGlob[2] < -G) {
+    float currCd =
+        -(2.0f * MASS * (aGlob[2] + G)) / (rhoA * x[1] * fabsf(x[1]));
+    Cd = (1.0f - alpha_cd) * Cd + alpha_cd * currCd;
+  }
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
