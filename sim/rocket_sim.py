@@ -51,6 +51,7 @@ CD_MAX = 4.0
 ALPHA_CD = 0.05  # Low-pass filter coefficient at 500 Hz
 CONTROL_VEL_START = 55.0  # m/s, velocity threshold for deploying airbrakes
 TARGET_ALTITUDE = 228.6  # m, target apogee altitude
+N_CD_SEARCH = 20  # number of Cd samples the flight computer evaluates
 
 
 class ThrustCurve:
@@ -177,8 +178,9 @@ def flight_computer(pos, vel, accel, cd_estimate, motor_position):
     
     Returns target motor position.
     """
-    # Only activate control during coast phase
-    if accel >= 0 or vel > CONTROL_VEL_START:
+    # Only activate control during coast phase (match firmware):
+    # stay closed during any residual positive accel (late motor burn)
+    if accel >= 0:
         return MOTOR_MIN
     
     # Predict apogee with current conditions
@@ -189,19 +191,20 @@ def flight_computer(pos, vel, accel, cd_estimate, motor_position):
     # Binary search through Cd range to find Cd that gives target altitude
     optimal_cd = cd_estimate
     
-    # Simple search: try different Cd values
+    # Simple search: try different Cd values sampled between CD_MIN and CD_MAX
     best_cd = cd_estimate
     min_error = abs(predicted_apogee - TARGET_ALTITUDE)
-    
-    for cd_test in np.linspace(CD_MIN, CD_MAX, 20):
+
+    cd_step = (CD_MAX - CD_MIN) / float(N_CD_SEARCH - 1)
+    for i in range(N_CD_SEARCH):
+        cd_test = CD_MIN + cd_step * float(i)
         test_remaining = get_remaining_altitude(vel, cd_test)
         test_apogee = pos + test_remaining
         error = abs(test_apogee - TARGET_ALTITUDE)
-        
         if error < min_error:
             min_error = error
             best_cd = cd_test
-    
+
     optimal_cd = best_cd
     
     # Calculate drag per unit position from current state
@@ -274,14 +277,18 @@ def run_simulation():
         airbrake_force = 0.5 * RHO * AREA * (drag_cd - BASE_CD) * state[1] * abs(state[1])
         airbrake_forces.append(airbrake_force)
         
-        # Run flight computer and Cd estimator at 500 Hz
+        # Run flight computer and Cd estimator at FLIGHT_COMP_DT
         if t - last_fc_time >= FLIGHT_COMP_DT - 1e-9:  # Small epsilon for float comparison
             # Update Cd estimate
             cd_estimate = update_cd_estimate(cd_estimate, accel, state[1])
-            
-            # Flight computer
-            target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate, motor_position)
-            
+
+            # Emulate firmware state machine: only call flight computer when
+            # velocity is below the control threshold; otherwise keep closed.
+            if state[1] <= CONTROL_VEL_START:
+                target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate, motor_position)
+            else:
+                target_motor_position = MOTOR_MIN
+
             last_fc_time = t
         
         # Calculate predicted apogee only during coast (deceleration)
