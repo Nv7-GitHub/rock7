@@ -16,13 +16,13 @@ MAX_MOTOR_VEL = 60.0  # units/s (0-24 in 0.4s)
 MOTOR_MIN = 0.0
 MOTOR_MAX = 24.0
 
-# Cd relationship: linear from 0.5 at position 0 to 4.0 at position 24
-CD_MIN = 0.5
+# Cd relationship: linear from BASE_CD at position 0 to 4.0 at position 24
+CD_MIN = BASE_CD
 CD_MAX = 4.0
 
 # Cd estimator parameters (from estimator.cpp)
 ALPHA_CD = 0.05  # Low-pass filter coefficient at 500 Hz
-CONTROL_VEL_START = 50.0  # m/s, velocity threshold for deploying airbrakes
+CONTROL_VEL_START = 55.0  # m/s, velocity threshold for deploying airbrakes
 
 
 class ThrustCurve:
