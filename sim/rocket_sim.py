@@ -258,9 +258,12 @@ def run_simulation():
             
             last_fc_time = t
         
-        # Calculate predicted apogee
-        remaining_alt = get_remaining_altitude(state[1], cd_estimate)
-        predicted_apogee = state[0] + remaining_alt
+        # Calculate predicted apogee only during coast (deceleration)
+        if accel <= 0.0:
+            remaining_alt = get_remaining_altitude(state[1], cd_estimate)
+            predicted_apogee = state[0] + remaining_alt
+        else:
+            predicted_apogee = np.nan
         predicted_apogees.append(predicted_apogee)
         
         cd_estimates.append(cd_estimate)
