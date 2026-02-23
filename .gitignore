@@ -10,3 +10,5 @@
 flight_data/*
 
 sim/slprj/*
+
+__pycache__

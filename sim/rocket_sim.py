@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from coast_table import get_remaining_altitude, CD_RANGE, ALTITUDE_TABLE
 
 # Constants from config.h
 MASS = 0.603  # kg
@@ -23,6 +24,7 @@ CD_MAX = 4.0
 # Cd estimator parameters (from estimator.cpp)
 ALPHA_CD = 0.05  # Low-pass filter coefficient at 500 Hz
 CONTROL_VEL_START = 55.0  # m/s, velocity threshold for deploying airbrakes
+TARGET_ALTITUDE = 228.6  # m, target apogee altitude
 
 
 class ThrustCurve:
@@ -141,18 +143,62 @@ def update_cd_estimate(cd_estimate, accel, vel):
     return cd_estimate
 
 
-def flight_computer(pos, vel, accel, cd_estimate):
+def flight_computer(pos, vel, accel, cd_estimate, motor_position):
     """
-    Flight computer algorithm.
-    Returns target motor position.
+    Flight computer algorithm with optimal control.
+    Uses coast phase lookup table to find optimal Cd, then calculates
+    required motor position based on current drag characteristics.
     
-    Current logic: if acceleration is negative and velocity < 28 m/s,
-    move motor to 24 (full airbrakes). Otherwise 0.
+    Returns target motor position.
     """
-    if accel < 0 and vel < CONTROL_VEL_START:
-        return MOTOR_MAX
-    else:
+    # Only activate control during coast phase
+    if accel >= 0 or vel < 10.0:
         return MOTOR_MIN
+    
+    # Predict apogee with current conditions
+    remaining_alt = get_remaining_altitude(vel, cd_estimate)
+    predicted_apogee = pos + remaining_alt
+    
+    # Find optimal Cd for target altitude
+    # Binary search through Cd range to find Cd that gives target altitude
+    optimal_cd = cd_estimate
+    
+    # Simple search: try different Cd values
+    best_cd = cd_estimate
+    min_error = abs(predicted_apogee - TARGET_ALTITUDE)
+    
+    for cd_test in np.linspace(CD_MIN, CD_MAX, 20):
+        test_remaining = get_remaining_altitude(vel, cd_test)
+        test_apogee = pos + test_remaining
+        error = abs(test_apogee - TARGET_ALTITUDE)
+        
+        if error < min_error:
+            min_error = error
+            best_cd = cd_test
+    
+    optimal_cd = best_cd
+    
+    # Calculate drag per unit position from current state
+    # cd_estimate = BASE_CD + drag_per_position * motor_position
+    # So: drag_per_position = (cd_estimate - BASE_CD) / motor_position
+    
+    if motor_position > 1.0:  # Only calculate if motor is significantly open
+        drag_per_position = (cd_estimate - BASE_CD) / motor_position
+    else:
+        # Use default relationship if motor is near zero
+        drag_per_position = (CD_MAX - CD_MIN) / MOTOR_MAX
+    
+    # Calculate required motor position for optimal Cd
+    # optimal_cd = BASE_CD + drag_per_position * required_position
+    if abs(drag_per_position) > 1e-6:  # Avoid division by zero
+        required_position = (optimal_cd - BASE_CD) / drag_per_position
+    else:
+        required_position = MOTOR_MIN
+    
+    # Clamp to valid range
+    required_position = np.clip(required_position, MOTOR_MIN, MOTOR_MAX)
+    
+    return required_position
 
 
 def run_simulation():
@@ -176,6 +222,7 @@ def run_simulation():
     target_motor_positions = []
     cd_estimates = []
     airbrake_forces = []
+    predicted_apogees = []
     
     # Flight computer timing (500 Hz)
     last_fc_time = 0.0
@@ -207,9 +254,14 @@ def run_simulation():
             cd_estimate = update_cd_estimate(cd_estimate, accel, state[1])
             
             # Flight computer
-            target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate)
+            target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate, motor_position)
             
             last_fc_time = t
+        
+        # Calculate predicted apogee
+        remaining_alt = get_remaining_altitude(state[1], cd_estimate)
+        predicted_apogee = state[0] + remaining_alt
+        predicted_apogees.append(predicted_apogee)
         
         cd_estimates.append(cd_estimate)
         target_motor_positions.append(target_motor_position)
@@ -239,22 +291,25 @@ def run_simulation():
     return (np.array(times), np.array(positions), np.array(velocities), 
             np.array(accelerations), np.array(motor_positions), 
             np.array(target_motor_positions), np.array(cd_estimates),
-            np.array(airbrake_forces))
+            np.array(airbrake_forces), np.array(predicted_apogees))
 
 
 def plot_results(times, positions, velocities, accelerations, 
                 motor_positions, target_motor_positions, cd_estimates,
-                airbrake_forces):
+                airbrake_forces, predicted_apogees):
     """Create interactive plots of simulation results."""
     fig, axes = plt.subplots(3, 2, figsize=(14, 10))
     fig.suptitle('Rocket Flight Simulation Results', fontsize=16, fontweight='bold')
     
-    # Position
-    axes[0, 0].plot(times, positions, 'b-', linewidth=2)
+    # Position with predicted apogee
+    axes[0, 0].plot(times, positions, 'b-', linewidth=2, label='Actual Altitude')
+    axes[0, 0].plot(times, predicted_apogees, 'g--', linewidth=1.5, alpha=0.7, label='Predicted Apogee')
+    axes[0, 0].axhline(y=TARGET_ALTITUDE, color='red', linestyle=':', alpha=0.5, label='Target Altitude')
     axes[0, 0].set_xlabel('Time (s)', fontsize=11)
     axes[0, 0].set_ylabel('Position (m)', fontsize=11)
     axes[0, 0].set_title('Altitude vs Time', fontweight='bold')
     axes[0, 0].grid(True, alpha=0.3)
+    axes[0, 0].legend()
     
     # Velocity
     axes[0, 1].plot(times, velocities, 'r-', linewidth=2)
@@ -308,6 +363,8 @@ def plot_results(times, positions, velocities, accelerations,
     # Print summary statistics
     print("\n=== Simulation Summary ===")
     print(f"Max altitude: {np.max(positions):.2f} m")
+    print(f"Target altitude: {TARGET_ALTITUDE:.2f} m")
+    print(f"Final predicted apogee: {predicted_apogees[-1]:.2f} m")
     print(f"Max velocity: {np.max(velocities):.2f} m/s")
     print(f"Max acceleration: {np.max(accelerations)/G:.2f} G")
     print(f"Max airbrake force: {np.max(airbrake_forces):.2f} N")
