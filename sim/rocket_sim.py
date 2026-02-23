@@ -152,7 +152,7 @@ def flight_computer(pos, vel, accel, cd_estimate, motor_position):
     Returns target motor position.
     """
     # Only activate control during coast phase
-    if accel >= 0 or vel < 10.0:
+    if accel >= 0 or vel > CONTROL_VEL_START:
         return MOTOR_MIN
     
     # Predict apogee with current conditions
