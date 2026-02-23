@@ -1,6 +1,32 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from coast_table import get_remaining_altitude, CD_RANGE, ALTITUDE_TABLE
+from coast_table import VEL_RANGE, CD_RANGE, ALTITUDE_TABLE
+
+
+def get_remaining_altitude(velocity, cd):
+    """Get remaining altitude to apogee using bilinear interpolation."""
+    vel = np.clip(velocity, VEL_RANGE[0], VEL_RANGE[-1])
+    cd_val = np.clip(cd, CD_RANGE[0], CD_RANGE[-1])
+
+    vel_idx = np.searchsorted(VEL_RANGE, vel) - 1
+    vel_idx = np.clip(vel_idx, 0, len(VEL_RANGE) - 2)
+    cd_idx = np.searchsorted(CD_RANGE, cd_val) - 1
+    cd_idx = np.clip(cd_idx, 0, len(CD_RANGE) - 2)
+
+    v0, v1 = VEL_RANGE[vel_idx], VEL_RANGE[vel_idx + 1]
+    c0, c1 = CD_RANGE[cd_idx], CD_RANGE[cd_idx + 1]
+
+    vel_weight = (vel - v0) / (v1 - v0) if v1 != v0 else 0.0
+    cd_weight = (cd_val - c0) / (c1 - c0) if c1 != c0 else 0.0
+
+    alt_00 = ALTITUDE_TABLE[vel_idx, cd_idx]
+    alt_01 = ALTITUDE_TABLE[vel_idx, cd_idx + 1]
+    alt_10 = ALTITUDE_TABLE[vel_idx + 1, cd_idx]
+    alt_11 = ALTITUDE_TABLE[vel_idx + 1, cd_idx + 1]
+
+    alt_0 = alt_00 * (1 - vel_weight) + alt_10 * vel_weight
+    alt_1 = alt_01 * (1 - vel_weight) + alt_11 * vel_weight
+    return alt_0 * (1 - cd_weight) + alt_1 * cd_weight
 
 # Constants from config.h
 MASS = 0.603  # kg

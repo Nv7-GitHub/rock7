@@ -12,6 +12,9 @@
 #define VEL_DESCENT -1.0f        // m/s, vel drops below this to go to DESCENT
 #define ALT_LANDED 2.0f          // m, alt below this to consider landed
 #define VEL_LANDED 1.0f          // m/s, abs(vel) below this to consider landed
+#define TARGET_ALTITUDE 228.6f   // m, target apogee altitude
+#define MOTOR_MAX 24.0f          // Motor position for fully open
+#define MOTOR_MIN 0.0f           // Motor position for fully closed
 
 // Constants
 #define AREA (M_PI * (6.6f / 100.0f) * (6.6f / 100.0f)) / 4.0f  // m^2
