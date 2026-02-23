@@ -187,6 +187,13 @@ float Cd;
 float rawSensorData[2] = {0.0f, 0.0f};
 float rawBaroData = 0.0f;  // Always-updated raw baro for logging
 
+// Baro compensation buffer for airbrake pressure effect
+// sin(motorpos * PI/48) sampled every loop, delayed by BARO_COMP_DELAY_MS
+constexpr int BARO_COMP_DELAY_SAMPLES = BARO_COMP_DELAY_MS * LOOPRATE / 1000;
+constexpr int BARO_COMP_BUF_SIZE = BARO_COMP_DELAY_SAMPLES + 2;
+float baroCompBuf[BARO_COMP_BUF_SIZE];
+int baroCompHead = 0;
+
 // Kalman filter constants
 float A[3][3] = {
     {1.0f, dT, -0.5f * dT* dT},
@@ -224,6 +231,12 @@ void FilterReset() {
 
   // Initial coefficient of drag
   Cd = BASE_CD;
+
+  // Initialize baro compensation buffer
+  for (int i = 0; i < BARO_COMP_BUF_SIZE; ++i) {
+    baroCompBuf[i] = 0.0f;
+  }
+  baroCompHead = 0;
 }
 
 const float alpha_cd = 0.05f;  // 4.2 Hz cutoff @ 500 Hz looprate
@@ -237,6 +250,10 @@ void FilterUpdate() {
   // Update orientation filter
   OrientationUpdate();
   GetGlobalAccel();
+
+  // Update baro compensation buffer with current airbrake pressure effect
+  baroCompBuf[baroCompHead] = sinf(motorpos * (float)M_PI / 48.0f);
+  baroCompHead = (baroCompHead + 1) % BARO_COMP_BUF_SIZE;
 
   // Kalman prediction step
   float x_pred[3];
@@ -259,8 +276,17 @@ void FilterUpdate() {
     hp.startConversion();
 
     // Always store raw data for logging
-    float z = hp.hp_sensorData.A - hpBias;
-    rawBaroData = z;
+    float baroRaw = hp.hp_sensorData.A - hpBias;
+
+    // Correct for airbrake pressure disturbance using the motor position from
+    // BARO_COMP_DELAY_MS ago: z += COEFF * sin(motorpos/max * pi/2) * 0.5 * rho
+    // * v^2
+    int baroCompIdx =
+        (baroCompHead - 1 - BARO_COMP_DELAY_SAMPLES + BARO_COMP_BUF_SIZE) %
+        BARO_COMP_BUF_SIZE;
+    float z = baroRaw + BARO_COMP_COEFF * baroCompBuf[baroCompIdx] * 0.5f *
+                            RHO * x[1] * x[1];
+    rawBaroData = baroRaw;
 
     // Only do Kalman update during coast phase, high accel (4G) or vel (50m/s)
     // make it unreliable

@@ -22,4 +22,9 @@
 #define G 9.80665f                                              // m/s^2
 constexpr float rhoA = RHO * AREA;  // Precomputed RHO * A
 
+// Baro compensation for airbrake pressure effect
+#define BARO_COMP_COEFF 0.12f  // Compensation coefficient
+#define BARO_COMP_DELAY_MS \
+  40  // Delay between airbrake opening and baro effect (ms)
+
 #endif  // CONFIG_H
