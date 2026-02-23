@@ -288,9 +288,9 @@ void FilterUpdate() {
                             RHO * x[1] * x[1];
     rawBaroData = baroRaw;
 
-    // Only do Kalman update during coast phase, high accel (4G) or vel (50m/s)
+    // Only do Kalman update during coast phase, high accel (4G) or vel (55m/s)
     // make it unreliable
-    if (fabsf(aGlob[2]) < (4 * G) && fabsf(x[1]) < 50.0f) {
+    if (fabsf(aGlob[2]) < (4 * G) && fabsf(x[1]) < 55.0f) {
       // Kalman update step
       float y = z - x[0];  // innovation
       float S = P[0][0] + R;
