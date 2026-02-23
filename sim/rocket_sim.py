@@ -37,8 +37,10 @@ G = 9.80665  # m/s^2
 rhoA = RHO * AREA
 
 # Simulation parameters
-DT = 0.001  # 1 kHz physics simulation
-FLIGHT_COMP_DT = 0.002  # 500 Hz flight computer & Cd estimator
+DT = 0.0005  # 2 kHz physics simulation
+# Flight computer (control) and estimator timings
+FC_DT = 0.0005   # 2 kHz flight computer
+EST_DT = 0.002   # 500 Hz Cd estimator
 MAX_MOTOR_VEL = 60.0  # units/s (0-24 in 0.4s)
 MOTOR_MIN = 0.0
 MOTOR_MAX = 24.0
@@ -253,8 +255,9 @@ def run_simulation():
     airbrake_forces = []
     predicted_apogees = []
     
-    # Flight computer timing (500 Hz)
+    # Flight computer and estimator timing
     last_fc_time = 0.0
+    last_est_time = 0.0
     
     # Run simulation until apogee
     prev_vel = 0.0
@@ -277,18 +280,17 @@ def run_simulation():
         airbrake_force = 0.5 * RHO * AREA * (drag_cd - BASE_CD) * state[1] * abs(state[1])
         airbrake_forces.append(airbrake_force)
         
-        # Run flight computer and Cd estimator at FLIGHT_COMP_DT
-        if t - last_fc_time >= FLIGHT_COMP_DT - 1e-9:  # Small epsilon for float comparison
-            # Update Cd estimate
+        # Update estimator at EST_DT
+        if t - last_est_time >= EST_DT - 1e-12:
             cd_estimate = update_cd_estimate(cd_estimate, accel, state[1])
+            last_est_time = t
 
-            # Emulate firmware state machine: only call flight computer when
-            # velocity is below the control threshold; otherwise keep closed.
+        # Run flight computer at FC_DT (2 kHz) and gate by velocity threshold
+        if t - last_fc_time >= FC_DT - 1e-12:
             if state[1] <= CONTROL_VEL_START:
                 target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate, motor_position)
             else:
                 target_motor_position = MOTOR_MIN
-
             last_fc_time = t
         
         # Calculate predicted apogee only during coast (deceleration)
@@ -302,7 +304,7 @@ def run_simulation():
         cd_estimates.append(cd_estimate)
         target_motor_positions.append(target_motor_position)
         
-        # Update motor position with rate limiting (runs at 1 kHz)
+        # Update motor position with rate limiting (runs at physics rate, DT)
         # Update motor position with rate limiting
         motor_position = update_motor_position(motor_position, target_motor_position, DT)
         motor_positions.append(motor_position)
@@ -412,8 +414,9 @@ def plot_results(times, positions, velocities, accelerations,
 
 if __name__ == '__main__':
     print("Starting rocket simulation...")
-    print(f"Physics simulation: {DT*1000:.1f} ms ({1/DT:.0f} Hz)")
-    print(f"Flight computer: {FLIGHT_COMP_DT*1000:.1f} ms ({1/FLIGHT_COMP_DT:.0f} Hz)")
+    print(f"Physics simulation: {DT*1000:.2f} ms ({1/DT:.0f} Hz)")
+    print(f"Flight computer: {FC_DT*1000:.2f} ms ({1/FC_DT:.0f} Hz)")
+    print(f"Estimator (Cd): {EST_DT*1000:.2f} ms ({1/EST_DT:.0f} Hz)")
     print(f"Motor max velocity: {MAX_MOTOR_VEL} units/s")
     print(f"Cd range: {CD_MIN} - {CD_MAX}")
     print()
