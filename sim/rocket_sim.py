@@ -55,6 +55,55 @@ CONTROL_VEL_START = 55.0  # m/s, velocity threshold for deploying airbrakes
 TARGET_ALTITUDE = 228.6  # m, target apogee altitude
 N_CD_SEARCH = 20  # number of Cd samples the flight computer evaluates
 
+# Cd controller tuning (match firmware-style closed-loop Cd tracking)
+CD_CTRL_KP = 5.0  # position units per Cd error
+CD_CTRL_KI = 25.0  # position units per (Cd error * s)
+CD_CTRL_ERR_DEADBAND = 0.01  # Cd deadband to reduce chatter
+
+
+class CdPiController:
+    """PI controller that drives motor position to track target Cd."""
+
+    def __init__(self, kp, ki, deadband, motor_min, motor_max):
+        self.kp = kp
+        self.ki = ki
+        self.deadband = deadband
+        self.motor_min = motor_min
+        self.motor_max = motor_max
+        self.integral = motor_min
+        self.active = False
+
+    def reset(self, current_position):
+        self.integral = float(np.clip(current_position, self.motor_min, self.motor_max))
+        self.active = False
+
+    def update(self, target_cd, measured_cd, current_position, dt, enabled=True):
+        if not enabled:
+            self.reset(current_position)
+            return self.motor_min
+
+        if not self.active:
+            self.active = True
+            self.integral = float(np.clip(current_position, self.motor_min, self.motor_max))
+
+        dt = float(np.clip(dt, 1e-4, 0.05))
+        error = target_cd - measured_cd
+        if abs(error) < self.deadband:
+            error = 0.0
+
+        unsat_target = self.integral + self.kp * error
+        target = float(np.clip(unsat_target, self.motor_min, self.motor_max))
+
+        # Anti-windup: do not integrate if saturated and error pushes further out.
+        pushing_high = target >= self.motor_max and error > 0.0
+        pushing_low = target <= self.motor_min and error < 0.0
+        if not (pushing_high or pushing_low):
+            self.integral += self.ki * error * dt
+            self.integral = float(np.clip(self.integral, self.motor_min, self.motor_max))
+
+        target = self.integral + self.kp * error
+        return float(np.clip(target, self.motor_min, self.motor_max))
+
 
 class ThrustCurve:
     """Simple linear interpolation for thrust curve."""
@@ -172,28 +221,12 @@ def update_cd_estimate(cd_estimate, accel, vel):
     return cd_estimate
 
 
-def flight_computer(pos, vel, accel, cd_estimate, motor_position):
-    """
-    Flight computer algorithm with optimal control.
-    Uses coast phase lookup table to find optimal Cd, then calculates
-    required motor position based on current drag characteristics.
-    
-    Returns target motor position.
-    """
-    # Only activate control during coast phase (match firmware):
-    # stay closed during any residual positive accel (late motor burn)
-    if accel >= 0:
-        return MOTOR_MIN
-    
+def find_target_cd(pos, vel, cd_estimate):
+    """Find Cd that best hits target apogee using lookup-table search."""
     # Predict apogee with current conditions
     remaining_alt = get_remaining_altitude(vel, cd_estimate)
     predicted_apogee = pos + remaining_alt
-    
-    # Find optimal Cd for target altitude
-    # Binary search through Cd range to find Cd that gives target altitude
-    optimal_cd = cd_estimate
-    
-    # Simple search: try different Cd values sampled between CD_MIN and CD_MAX
+
     best_cd = cd_estimate
     min_error = abs(predicted_apogee - TARGET_ALTITUDE)
 
@@ -207,29 +240,26 @@ def flight_computer(pos, vel, accel, cd_estimate, motor_position):
             min_error = error
             best_cd = cd_test
 
-    optimal_cd = best_cd
+    return best_cd
+
+
+def flight_computer(pos, vel, accel, cd_estimate, motor_position, cd_controller, dt):
+    """
+    Flight computer algorithm with optimal control.
+    Uses coast phase lookup table to find optimal Cd, then calculates
+    required motor position based on current drag characteristics.
     
-    # Calculate drag per unit position from current state
-    # cd_estimate = BASE_CD + drag_per_position * motor_position
-    # So: drag_per_position = (cd_estimate - BASE_CD) / motor_position
-    
-    if motor_position > 1.0:  # Only calculate if motor is significantly open
-        drag_per_position = (cd_estimate - BASE_CD) / motor_position
-    else:
-        # Use default relationship if motor is near zero
-        drag_per_position = (CD_MAX - CD_MIN) / MOTOR_MAX
-    
-    # Calculate required motor position for optimal Cd
-    # optimal_cd = BASE_CD + drag_per_position * required_position
-    if abs(drag_per_position) > 1e-6:  # Avoid division by zero
-        required_position = (optimal_cd - BASE_CD) / drag_per_position
-    else:
-        required_position = MOTOR_MIN
-    
-    # Clamp to valid range
-    required_position = np.clip(required_position, MOTOR_MIN, MOTOR_MAX)
-    
-    return required_position
+    Returns target motor position and target Cd.
+    """
+    # Only activate control during coast phase (match firmware):
+    # stay closed during any residual positive accel (late motor burn)
+    if accel >= 0:
+        cd_controller.reset(MOTOR_MIN)
+        return MOTOR_MIN, np.nan
+
+    target_cd = find_target_cd(pos, vel, cd_estimate)
+    target_position = cd_controller.update(target_cd, cd_estimate, motor_position, dt)
+    return target_position, target_cd
 
 
 def run_simulation():
@@ -243,6 +273,11 @@ def run_simulation():
     motor_position = 0.0
     target_motor_position = 0.0
     cd_estimate = BASE_CD
+    target_cd = np.nan
+
+    cd_controller = CdPiController(
+        CD_CTRL_KP, CD_CTRL_KI, CD_CTRL_ERR_DEADBAND, MOTOR_MIN, MOTOR_MAX
+    )
     
     # Storage for plotting
     times = []
@@ -252,6 +287,7 @@ def run_simulation():
     motor_positions = []
     target_motor_positions = []
     cd_estimates = []
+    target_cds = []
     airbrake_forces = []
     predicted_apogees = []
     
@@ -288,9 +324,13 @@ def run_simulation():
         # Run flight computer at FC_DT (2 kHz) and gate by velocity threshold
         if t - last_fc_time >= FC_DT - 1e-12:
             if state[1] <= CONTROL_VEL_START:
-                target_motor_position = flight_computer(state[0], state[1], accel, cd_estimate, motor_position)
+                target_motor_position, target_cd = flight_computer(
+                    state[0], state[1], accel, cd_estimate, motor_position, cd_controller, FC_DT
+                )
             else:
+                cd_controller.reset(MOTOR_MIN)
                 target_motor_position = MOTOR_MIN
+                target_cd = np.nan
             last_fc_time = t
         
         # Calculate predicted apogee only during coast (deceleration)
@@ -303,6 +343,7 @@ def run_simulation():
         
         cd_estimates.append(cd_estimate)
         target_motor_positions.append(target_motor_position)
+        target_cds.append(target_cd)
         
         # Update motor position with rate limiting (runs at physics rate, DT)
         # Update motor position with rate limiting
@@ -329,12 +370,12 @@ def run_simulation():
     return (np.array(times), np.array(positions), np.array(velocities), 
             np.array(accelerations), np.array(motor_positions), 
             np.array(target_motor_positions), np.array(cd_estimates),
-            np.array(airbrake_forces), np.array(predicted_apogees))
+            np.array(target_cds), np.array(airbrake_forces), np.array(predicted_apogees))
 
 
 def plot_results(times, positions, velocities, accelerations, 
                 motor_positions, target_motor_positions, cd_estimates,
-                airbrake_forces, predicted_apogees):
+                target_cds, airbrake_forces, predicted_apogees):
     """Create interactive plots of simulation results."""
     fig, axes = plt.subplots(3, 2, figsize=(14, 10))
     fig.suptitle('Rocket Flight Simulation Results', fontsize=16, fontweight='bold')
@@ -378,6 +419,7 @@ def plot_results(times, positions, velocities, accelerations,
     
     # Cd estimate
     axes[2, 0].plot(times, cd_estimates, 'm-', linewidth=2)
+    axes[2, 0].plot(times, target_cds, color='orange', linestyle='--', linewidth=1.8, alpha=0.8, label='Target Cd')
     axes[2, 0].axhline(y=BASE_CD, color='gray', linestyle='--', alpha=0.5, label='Base Cd')
     axes[2, 0].set_xlabel('Time (s)', fontsize=11)
     axes[2, 0].set_ylabel('Estimated Cd', fontsize=11)
@@ -408,6 +450,10 @@ def plot_results(times, positions, velocities, accelerations,
     print(f"Max airbrake force: {np.max(airbrake_forces):.2f} N")
     print(f"Flight time to apogee: {times[-1]:.3f} s")
     print(f"Final Cd estimate: {cd_estimates[-1]:.3f}")
+    finite_target_cds = target_cds[np.isfinite(target_cds)]
+    if finite_target_cds.size > 0:
+        print(f"Final target Cd: {finite_target_cds[-1]:.3f}")
+    print(f"Cd controller gains: Kp={CD_CTRL_KP:.2f}, Ki={CD_CTRL_KI:.2f}, deadband={CD_CTRL_ERR_DEADBAND:.3f}")
     
     return fig
 

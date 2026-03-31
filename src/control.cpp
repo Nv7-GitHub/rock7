@@ -1,5 +1,9 @@
 #include "control.h"
 
+#include <Arduino.h>
+
+float desiredCd = BASE_CD;
+
 float getCoastAltitude(float velocity, float cd) {
   // Clamp inputs
   if (velocity < COAST_VEL_MIN) velocity = COAST_VEL_MIN;
@@ -29,10 +33,38 @@ float getCoastAltitude(float velocity, float cd) {
 }
 
 void controlUpdate() {
+  // Controller state persists across calls and is reset outside coast phase.
+  static bool controllerActive = false;
+  static uint32_t lastUpdateUs = 0;
+  static float posIntegral = MOTOR_MIN;
+
   // Stay closed during any residual positive accel (late motor burn)
   if (aGlob[2] >= 0.0f) {
+    desiredCd = Cd;
+    controllerActive = false;
+    posIntegral = MOTOR_MIN;
+    lastUpdateUs = micros();
     odrvPosition(MOTOR_MIN);
     return;
+  }
+
+  uint32_t nowUs = micros();
+  float dt = CD_CTRL_DT_NOMINAL;
+  if (controllerActive) {
+    uint32_t dtUs = nowUs - lastUpdateUs;
+    if (dtUs > 0 && dtUs < 1000000UL) {
+      dt = 1e-6f * (float)dtUs;
+    }
+  }
+  lastUpdateUs = nowUs;
+
+  if (!controllerActive) {
+    controllerActive = true;
+    posIntegral = motorpos;
+  }
+
+  if (dt < 0.0001f || dt > 0.05f) {
+    dt = CD_CTRL_DT_NOMINAL;
   }
 
   // Search full Cd range in COAST_N_CD steps for the Cd that best hits
@@ -50,22 +82,31 @@ void controlUpdate() {
     }
   }
 
-  // Map optimal Cd to a motor position using the current drag per position
-  // Cd = COAST_CD_MIN + dragPerPos * motorpos  =>  dragPerPos = (Cd -
-  // COAST_CD_MIN) / motorpos
-  float dragPerPos;
-  if (motorpos > 1.0f) {
-    dragPerPos = (Cd - COAST_CD_MIN) / motorpos;
-  } else {
-    dragPerPos = (COAST_CD_MAX - COAST_CD_MIN) /
-                 MOTOR_MAX;  // default when nearly closed
+  desiredCd = bestCd;
+
+  // Closed-loop Cd tracking:
+  // If Cd is too low, error is positive and controller opens airbrakes.
+  // If Cd is too high, error is negative and controller closes airbrakes.
+  float cdError = bestCd - Cd;
+  if (fabsf(cdError) < CD_CTRL_ERR_DEADBAND) {
+    cdError = 0.0f;
   }
 
-  float targetPos = MOTOR_MIN;
-  if (fabsf(dragPerPos) > 1e-6f) {
-    targetPos = (bestCd - COAST_CD_MIN) / dragPerPos;
+  float unsatTarget = posIntegral + CD_CTRL_KP * cdError;
+  float targetPos = unsatTarget;
+  if (targetPos < MOTOR_MIN) targetPos = MOTOR_MIN;
+  if (targetPos > MOTOR_MAX) targetPos = MOTOR_MAX;
+
+  // Anti-windup: stop integrating when saturated and error pushes further out.
+  bool pushingHigh = (targetPos >= MOTOR_MAX) && (cdError > 0.0f);
+  bool pushingLow = (targetPos <= MOTOR_MIN) && (cdError < 0.0f);
+  if (!(pushingHigh || pushingLow)) {
+    posIntegral += CD_CTRL_KI * cdError * dt;
+    if (posIntegral < MOTOR_MIN) posIntegral = MOTOR_MIN;
+    if (posIntegral > MOTOR_MAX) posIntegral = MOTOR_MAX;
   }
 
+  targetPos = posIntegral + CD_CTRL_KP * cdError;
   if (targetPos < MOTOR_MIN) targetPos = MOTOR_MIN;
   if (targetPos > MOTOR_MAX) targetPos = MOTOR_MAX;
   odrvPosition(targetPos);

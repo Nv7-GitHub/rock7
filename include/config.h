@@ -16,6 +16,12 @@
 #define MOTOR_MAX 24.0f          // Motor position for fully open
 #define MOTOR_MIN 0.0f           // Motor position for fully closed
 
+// Cd controller tuning (closed-loop Cd tracking)
+#define CD_CTRL_KP 5.0f             // position units per Cd error
+#define CD_CTRL_KI 25.0f            // position units per (Cd error * s)
+#define CD_CTRL_ERR_DEADBAND 0.01f  // Cd deadband to reduce chatter
+#define CD_CTRL_DT_NOMINAL 0.002f   // s, fallback dt when timing is invalid
+
 // Constants
 #define AREA (M_PI * (6.6f / 100.0f) * (6.6f / 100.0f)) / 4.0f  // m^2
 #define RHO 1.225f                                              // kg/m^3

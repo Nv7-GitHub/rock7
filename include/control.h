@@ -4,6 +4,8 @@
 #include "coast_table.h"
 #include "estimator.h"
 
+extern float desiredCd;
+
 float getCoastAltitude(float velocity, float cd);
 void controlUpdate();
 
