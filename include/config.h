@@ -13,7 +13,7 @@
 #define ALT_LANDED 2.0f          // m, alt below this to consider landed
 #define VEL_LANDED 1.0f          // m/s, abs(vel) below this to consider landed
 #define TARGET_ALTITUDE 228.6f   // m, target apogee altitude
-#define MOTOR_MAX 24.0f          // Motor position for fully open
+#define MOTOR_MAX 22.0f          // Motor position for fully open
 #define MOTOR_MIN 0.0f           // Motor position for fully closed
 
 // Cd controller tuning (closed-loop Cd tracking)

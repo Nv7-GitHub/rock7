@@ -43,7 +43,7 @@ FC_DT = 0.0005   # 2 kHz flight computer
 EST_DT = 0.002   # 500 Hz Cd estimator
 MAX_MOTOR_VEL = 60.0  # units/s (0-24 in 0.4s)
 MOTOR_MIN = 0.0
-MOTOR_MAX = 24.0
+MOTOR_MAX = 22.0
 
 # Cd relationship: linear from BASE_CD at position 0 to 4.0 at position 24
 CD_MIN = BASE_CD

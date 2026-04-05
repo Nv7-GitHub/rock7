@@ -252,7 +252,7 @@ void FilterUpdate() {
   GetGlobalAccel();
 
   // Update baro compensation buffer with current airbrake pressure effect
-  baroCompBuf[baroCompHead] = sinf(motorpos * (float)M_PI / 48.0f);
+  baroCompBuf[baroCompHead] = sinf(motorpos * (float)M_PI / 44.0f);
   baroCompHead = (baroCompHead + 1) % BARO_COMP_BUF_SIZE;
 
   // Kalman prediction step
