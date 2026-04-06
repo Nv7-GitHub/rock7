@@ -4,6 +4,34 @@
 
 float desiredCd = BASE_CD;
 
+static float solveDesiredCdContinuous(float velocity, float altitude) {
+  float predMinCd = altitude + getCoastAltitude(velocity, COAST_CD_MIN);
+  float predMaxCd = altitude + getCoastAltitude(velocity, COAST_CD_MAX);
+
+  // Target above no-brake prediction => close brakes.
+  if (TARGET_ALTITUDE >= predMinCd) {
+    return COAST_CD_MIN;
+  }
+  // Target below max-brake prediction => full brakes.
+  if (TARGET_ALTITUDE <= predMaxCd) {
+    return COAST_CD_MAX;
+  }
+
+  // Coast altitude is monotonic with Cd, so bisection gives a smooth Cd.
+  float lo = COAST_CD_MIN;
+  float hi = COAST_CD_MAX;
+  for (int i = 0; i < 14; ++i) {
+    float mid = 0.5f * (lo + hi);
+    float pred = altitude + getCoastAltitude(velocity, mid);
+    if (pred > TARGET_ALTITUDE) {
+      lo = mid;  // Need more drag
+    } else {
+      hi = mid;  // Need less drag
+    }
+  }
+  return 0.5f * (lo + hi);
+}
+
 float getCoastAltitude(float velocity, float cd) {
   // Clamp inputs
   if (velocity < COAST_VEL_MIN) velocity = COAST_VEL_MIN;
@@ -67,20 +95,7 @@ void controlUpdate() {
     dt = CD_CTRL_DT_NOMINAL;
   }
 
-  // Search full Cd range in COAST_N_CD steps for the Cd that best hits
-  // TARGET_ALTITUDE
-  float bestCd = Cd;
-  float minError = 1e10f;
-
-  for (int i = 0; i < COAST_N_CD; i++) {
-    float cdTest = COAST_CD_MIN + COAST_CD_STEP * (float)i;
-    float predictedApogee = x[0] + getCoastAltitude(x[1], cdTest);
-    float err = fabsf(predictedApogee - TARGET_ALTITUDE);
-    if (err < minError) {
-      minError = err;
-      bestCd = cdTest;
-    }
-  }
+  float bestCd = solveDesiredCdContinuous(x[1], x[0]);
 
   desiredCd = bestCd;
 

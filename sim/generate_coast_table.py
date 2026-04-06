@@ -1,142 +1,230 @@
-"""
-Generate a lookup table for coast phase altitude gain.
-Creates a 2D matrix of remaining altitude based on initial velocity and Cd.
-"""
+"""Generate coast table and update `config.h` mass/air-density constants."""
+
+from __future__ import annotations
+
+import argparse
+import re
+from pathlib import Path
+
 import numpy as np
 
-# Constants from config.h
-MASS = 0.625  # kg
-AREA = (np.pi * (6.6 / 100.0) ** 2) / 4.0  # m^2
-RHO = 1.212  # kg/m^3
+# Constants
 G = 9.80665  # m/s^2
+AREA = (np.pi * (6.6 / 100.0) ** 2) / 4.0  # m^2
+DT = 0.001  # 1 kHz for lookup generation accuracy
 
-# Simulation parameters
-DT = 0.001  # 1 kHz for accuracy
 
-def simulate_coast(initial_velocity, cd):
-    """
-    Simulate coast phase starting from given velocity and Cd.
-    Returns the altitude gained until apogee.
-    """
+def compute_air_density(temp_f: float, humidity_pct: float,
+                        pressure_pa: float = 101325.0) -> float:
+    """Compute moist-air density from Fahrenheit temperature and RH%."""
+    temp_c = (temp_f - 32.0) * (5.0 / 9.0)
+    temp_k = temp_c + 273.15
+    rh = max(0.0, min(100.0, humidity_pct)) / 100.0
+
+    # Magnus formula for saturation vapor pressure over water (Pa)
+    sat_vapor_pa = 610.94 * np.exp((17.625 * temp_c) / (temp_c + 243.04))
+    vapor_pa = rh * sat_vapor_pa
+    dry_air_pa = pressure_pa - vapor_pa
+
+    # Gas constants for dry air and water vapor.
+    r_dry = 287.05
+    r_vapor = 461.495
+    rho = (dry_air_pa / (r_dry * temp_k)) + (vapor_pa / (r_vapor * temp_k))
+    return float(rho)
+
+
+def simulate_coast(initial_velocity: float, cd: float, mass_kg: float,
+                   rho_air: float) -> float:
+    """Simulate coast and return altitude gained until apogee."""
     vel = initial_velocity
     alt_gained = 0.0
     t = 0.0
-    
-    # Coast until velocity becomes non-positive
-    while vel > 0 and t < 20.0:  # Safety timeout
-        # Drag force
-        drag = -0.5 * RHO * AREA * cd * vel * abs(vel)
-        weight = -MASS * G
-        
-        # Acceleration
-        accel = (drag + weight) / MASS
-        
-        # Simple Euler integration (fast and good enough for lookup table)
+
+    while vel > 0.0 and t < 20.0:
+        drag = -0.5 * rho_air * AREA * cd * vel * abs(vel)
+        weight = -mass_kg * G
+        accel = (drag + weight) / mass_kg
+
         vel += accel * DT
         alt_gained += vel * DT
         t += DT
-    
-    return max(0.0, alt_gained)  # Ensure non-negative
+
+    return max(0.0, alt_gained)
 
 
-def generate_coast_table(n_vel=16, n_cd=16):
-    """
-    Generate coast phase lookup table.
-    
-    Args:
-        n_vel: Number of velocity samples
-        n_cd: Number of Cd samples
-    
-    Returns:
-        vel_range: Array of velocity values
-        cd_range: Array of Cd values
-        altitude_table: 2D array [n_vel, n_cd] of altitude gains
-    """
-    # Define ranges based on expected flight conditions
-    vel_min, vel_max = 0.0, 80.0  # m/s
-    cd_min, cd_max = 0.0, 5.5
-    
+def generate_coast_table(mass_kg: float,
+                         rho_air: float,
+                         n_vel: int = 20,
+                         n_cd: int = 20,
+                         vel_min: float = 0.0,
+                         vel_max: float = 80.0,
+                         cd_min: float = 0.0,
+                         cd_max: float = 5.5):
+    """Generate the [velocity, Cd] -> coast altitude gain lookup table."""
     vel_range = np.linspace(vel_min, vel_max, n_vel)
     cd_range = np.linspace(cd_min, cd_max, n_cd)
-    
-    altitude_table = np.zeros((n_vel, n_cd))
-    
-    print(f"Generating {n_vel}x{n_cd} coast phase lookup table...")
-    print(f"Velocity range: {vel_min:.1f} - {vel_max:.1f} m/s")
-    print(f"Cd range: {cd_min:.2f} - {cd_max:.2f}")
-    
+    altitude_table = np.zeros((n_vel, n_cd), dtype=float)
+
+    print(f"Generating {n_vel}x{n_cd} coast table")
+    print(f"Mass: {mass_kg:.4f} kg, Air density: {rho_air:.6f} kg/m^3")
+    print(
+        f"Velocity range: {vel_min:.1f}-{vel_max:.1f} m/s, "
+        f"Cd range: {cd_min:.2f}-{cd_max:.2f}"
+    )
+
     for i, vel in enumerate(vel_range):
         for j, cd in enumerate(cd_range):
-            altitude_table[i, j] = simulate_coast(vel, cd)
-        
+            altitude_table[i, j] = simulate_coast(vel, cd, mass_kg, rho_air)
         if (i + 1) % 4 == 0:
-            print(f"Progress: {i+1}/{n_vel} velocity samples completed")
-    
-    print("Table generation complete!")
-    print(f"Altitude range: {np.min(altitude_table):.2f} - {np.max(altitude_table):.2f} m")
-    
+            print(f"Progress: {i + 1}/{n_vel}")
+
+    print(
+        f"Table generation complete. Altitude span: "
+        f"{np.min(altitude_table):.2f}-{np.max(altitude_table):.2f} m"
+    )
     return vel_range, cd_range, altitude_table
 
 
-def save_coast_table_to_file(vel_range, cd_range, altitude_table, filename='coast_table.py'):
-    """Save the coast table as a Python module."""
-    with open(filename, 'w') as f:
+def save_coast_table_to_file(vel_range: np.ndarray, cd_range: np.ndarray,
+                             altitude_table: np.ndarray,
+                             filename: Path) -> None:
+    """Save coast lookup table as a Python module."""
+    with filename.open("w") as f:
         f.write('"""\n')
         f.write('Coast phase lookup table for apogee prediction.\n')
         f.write('Auto-generated by generate_coast_table.py\n')
         f.write('"""\n')
         f.write('import numpy as np\n\n')
-        
-        f.write('# Velocity range (m/s)\n')
         f.write(f'VEL_RANGE = np.array({vel_range.tolist()})\n\n')
-        
-        f.write('# Cd range\n')
         f.write(f'CD_RANGE = np.array({cd_range.tolist()})\n\n')
-        
-        f.write('# Altitude gain table [n_vel, n_cd] (meters)\n')
         f.write('ALTITUDE_TABLE = np.array([\n')
         for row in altitude_table:
             f.write('    ' + str(row.tolist()) + ',\n')
         f.write('])\n')
-    
-    print(f"\nCoast table saved to {filename}")
+    print(f"Saved Python coast table: {filename}")
 
 
-def save_coast_table_to_cpp(vel_range, cd_range, altitude_table, filename='../include/coast_table.h'):
-    """Save the coast table as a C++ header."""
+def save_coast_table_to_cpp(vel_range: np.ndarray,
+                            cd_range: np.ndarray,
+                            altitude_table: np.ndarray,
+                            filename: Path) -> None:
+    """Save coast lookup table as a C++ header."""
     n_vel = len(vel_range)
     n_cd = len(cd_range)
-    with open(filename, 'w') as f:
-        f.write('#ifndef COAST_TABLE_H\n')
-        f.write('#define COAST_TABLE_H\n\n')
-        f.write('// Auto-generated by generate_coast_table.py\n')
-        f.write(f'// {n_vel}x{n_cd} table, vel {vel_range[0]:.1f}-{vel_range[-1]:.1f} m/s, Cd {cd_range[0]:.2f}-{cd_range[-1]:.2f}\n\n')
-        f.write(f'constexpr int COAST_N_VEL = {n_vel};\n')
-        f.write(f'constexpr int COAST_N_CD = {n_cd};\n\n')
-        f.write(f'constexpr float COAST_VEL_MIN = {vel_range[0]:.1f}f;\n')
-        f.write(f'constexpr float COAST_VEL_MAX = {vel_range[-1]:.1f}f;\n')
-        f.write(f'constexpr float COAST_VEL_STEP = {(vel_range[-1] - vel_range[0]) / (n_vel - 1):.10f}f;\n')
-        f.write(f'constexpr float COAST_CD_MIN = {cd_range[0]:.2f}f;\n')
-        f.write(f'constexpr float COAST_CD_MAX = {cd_range[-1]:.2f}f;\n')
-        f.write(f'constexpr float COAST_CD_STEP = {(cd_range[-1] - cd_range[0]) / (n_cd - 1):.10f}f;\n\n')
-        f.write('// Altitude gain table [n_vel][n_cd] (meters)\n')
-        f.write(f'constexpr float COAST_ALTITUDE_TABLE[{n_vel}][{n_cd}] = {{\n')
+
+    with filename.open("w") as f:
+        f.write("#ifndef COAST_TABLE_H\n")
+        f.write("#define COAST_TABLE_H\n\n")
+        f.write("// Auto-generated by generate_coast_table.py\n")
+        f.write(
+            f"// {n_vel}x{n_cd} table, vel {vel_range[0]:.1f}-"
+            f"{vel_range[-1]:.1f} m/s, Cd {cd_range[0]:.2f}-"
+            f"{cd_range[-1]:.2f}\n\n"
+        )
+        f.write(f"constexpr int COAST_N_VEL = {n_vel};\n")
+        f.write(f"constexpr int COAST_N_CD = {n_cd};\n\n")
+        f.write(f"constexpr float COAST_VEL_MIN = {vel_range[0]:.1f}f;\n")
+        f.write(f"constexpr float COAST_VEL_MAX = {vel_range[-1]:.1f}f;\n")
+        f.write(
+            "constexpr float COAST_VEL_STEP = "
+            f"{(vel_range[-1] - vel_range[0]) / (n_vel - 1):.10f}f;\n"
+        )
+        f.write(f"constexpr float COAST_CD_MIN = {cd_range[0]:.2f}f;\n")
+        f.write(f"constexpr float COAST_CD_MAX = {cd_range[-1]:.2f}f;\n")
+        f.write(
+            "constexpr float COAST_CD_STEP = "
+            f"{(cd_range[-1] - cd_range[0]) / (n_cd - 1):.10f}f;\n\n"
+        )
+        f.write("// Altitude gain table [n_vel][n_cd] (meters)\n")
+        f.write(f"constexpr float COAST_ALTITUDE_TABLE[{n_vel}][{n_cd}] = {{\n")
         for row in altitude_table:
-            vals = ', '.join(f'{v:.6f}f' for v in row)
-            f.write(f'    {{{vals}}},\n')
-        f.write('};\n\n')
-        f.write('#endif  // COAST_TABLE_H\n')
-    print(f'Coast table C++ header saved to {filename}')
+            vals = ", ".join(f"{v:.6f}f" for v in row)
+            f.write(f"    {{{vals}}},\n")
+        f.write("};\n\n")
+        f.write("#endif  // COAST_TABLE_H\n")
+
+    print(f"Saved C++ coast table header: {filename}")
 
 
-if __name__ == '__main__':
-    # Generate the table
-    vel_range, cd_range, altitude_table = generate_coast_table(n_vel=20, n_cd=20)
-    
-    # Save to Python file
-    save_coast_table_to_file(vel_range, cd_range, altitude_table, 'coast_table.py')
-    
-    # Save to C++ header
-    save_coast_table_to_cpp(vel_range, cd_range, altitude_table)
-    
-    print('\nDone!')
+def update_config_header(config_path: Path, mass_kg: float, rho_air: float,
+                         temp_f: float, humidity_pct: float) -> None:
+    """Update `MASS` and `RHO` macros in `config.h`."""
+    content = config_path.read_text()
+
+    mass_line = (
+        f"#define MASS {mass_kg:.6f}f         "
+        "// kg (auto-generated by generate_coast_table.py)"
+    )
+    rho_line = (
+        f"#define RHO {rho_air:.6f}f                                              "
+        f"// kg/m^3 (from {temp_f:.1f}F, {humidity_pct:.1f}% RH)"
+    )
+
+    content_new = re.sub(r"^#define\s+MASS\s+.*$", mass_line, content,
+                         flags=re.MULTILINE)
+    content_new = re.sub(r"^#define\s+RHO\s+.*$", rho_line, content_new,
+                         flags=re.MULTILINE)
+
+    if content_new == content:
+        raise RuntimeError(
+            "Failed to update MASS/RHO in config.h. "
+            "Expected '#define MASS' and '#define RHO' lines."
+        )
+
+    config_path.write_text(content_new)
+    print(f"Updated config constants in {config_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate coast table and sync MASS/RHO in config.h"
+    )
+    parser.add_argument("--mass-kg", type=float, default=0.625,
+                        help="Rocket mass (kg)")
+    parser.add_argument("--temp-f", type=float, default=68.0,
+                        help="Ambient temperature (F)")
+    parser.add_argument("--humidity", type=float, default=50.0,
+                        help="Relative humidity (%%)")
+    parser.add_argument("--pressure-pa", type=float, default=101325.0,
+                        help="Ambient pressure (Pa)")
+    parser.add_argument("--n-vel", type=int, default=20,
+                        help="Velocity grid count")
+    parser.add_argument("--n-cd", type=int, default=20,
+                        help="Cd grid count")
+    parser.add_argument("--output-py", default="coast_table.py",
+                        help="Output Python coast-table path")
+    parser.add_argument("--output-cpp", default="../include/coast_table.h",
+                        help="Output C++ header path")
+    parser.add_argument("--config-h", default="../include/config.h",
+                        help="Config header path to update")
+    args = parser.parse_args()
+
+    here = Path(__file__).resolve().parent
+    out_py = (here / args.output_py).resolve()
+    out_cpp = (here / args.output_cpp).resolve()
+    config_h = (here / args.config_h).resolve()
+
+    rho_air = compute_air_density(args.temp_f, args.humidity, args.pressure_pa)
+    print(
+        f"Computed rho = {rho_air:.6f} kg/m^3 "
+        f"at {args.temp_f:.1f}F, {args.humidity:.1f}% RH, "
+        f"{args.pressure_pa:.0f} Pa"
+    )
+
+    vel_range, cd_range, altitude_table = generate_coast_table(
+        mass_kg=args.mass_kg,
+        rho_air=rho_air,
+        n_vel=args.n_vel,
+        n_cd=args.n_cd,
+    )
+
+    save_coast_table_to_file(vel_range, cd_range, altitude_table, out_py)
+    save_coast_table_to_cpp(vel_range, cd_range, altitude_table, out_cpp)
+    update_config_header(config_h, args.mass_kg, rho_air, args.temp_f,
+                         args.humidity)
+
+    print("Done")
+
+
+if __name__ == "__main__":
+    main()
