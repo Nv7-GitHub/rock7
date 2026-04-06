@@ -24,7 +24,7 @@
 
 // Constants
 #define AREA (M_PI * (6.6f / 100.0f) * (6.6f / 100.0f)) / 4.0f  // m^2
-#define RHO 1.198877f                                              // kg/m^3 (from 68.0F, 50.0% RH)
+#define RHO 1.213071f                                              // kg/m^3 (from 63.0F, 70.0% RH)
 #define G 9.80665f                                              // m/s^2
 constexpr float rhoA = RHO * AREA;  // Precomputed RHO * A
 

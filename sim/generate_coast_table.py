@@ -2,11 +2,29 @@
 
 from __future__ import annotations
 
-import argparse
 import re
 from pathlib import Path
 
 import numpy as np
+
+# -----------------------------------------------------------------------------
+# User-editable configuration
+# -----------------------------------------------------------------------------
+MASS_KG = 0.625
+TEMP_F = 63.0
+HUMIDITY_PCT = 70.0
+PRESSURE_HPA = 1016.3
+
+N_VEL = 20
+N_CD = 20
+VEL_MIN = 0.0
+VEL_MAX = 80.0
+CD_MIN = 0.0
+CD_MAX = 5.5
+
+OUTPUT_PY = "coast_table.py"
+OUTPUT_CPP = "../include/coast_table.h"
+CONFIG_H = "../include/config.h"
 
 # Constants
 G = 9.80665  # m/s^2
@@ -15,11 +33,12 @@ DT = 0.001  # 1 kHz for lookup generation accuracy
 
 
 def compute_air_density(temp_f: float, humidity_pct: float,
-                        pressure_pa: float = 101325.0) -> float:
+                        pressure_hpa: float = 1013.25) -> float:
     """Compute moist-air density from Fahrenheit temperature and RH%."""
     temp_c = (temp_f - 32.0) * (5.0 / 9.0)
     temp_k = temp_c + 273.15
     rh = max(0.0, min(100.0, humidity_pct)) / 100.0
+    pressure_pa = pressure_hpa * 100.0
 
     # Magnus formula for saturation vapor pressure over water (Pa)
     sat_vapor_pa = 610.94 * np.exp((17.625 * temp_c) / (temp_c + 243.04))
@@ -160,12 +179,14 @@ def update_config_header(config_path: Path, mass_kg: float, rho_air: float,
         f"// kg/m^3 (from {temp_f:.1f}F, {humidity_pct:.1f}% RH)"
     )
 
-    content_new = re.sub(r"^#define\s+MASS\s+.*$", mass_line, content,
-                         flags=re.MULTILINE)
-    content_new = re.sub(r"^#define\s+RHO\s+.*$", rho_line, content_new,
-                         flags=re.MULTILINE)
+    content_new, mass_count = re.subn(
+        r"^#define\s+MASS\s+.*$", mass_line, content, flags=re.MULTILINE
+    )
+    content_new, rho_count = re.subn(
+        r"^#define\s+RHO\s+.*$", rho_line, content_new, flags=re.MULTILINE
+    )
 
-    if content_new == content:
+    if mass_count == 0 or rho_count == 0:
         raise RuntimeError(
             "Failed to update MASS/RHO in config.h. "
             "Expected '#define MASS' and '#define RHO' lines."
@@ -176,52 +197,33 @@ def update_config_header(config_path: Path, mass_kg: float, rho_air: float,
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate coast table and sync MASS/RHO in config.h"
-    )
-    parser.add_argument("--mass-kg", type=float, default=0.625,
-                        help="Rocket mass (kg)")
-    parser.add_argument("--temp-f", type=float, default=68.0,
-                        help="Ambient temperature (F)")
-    parser.add_argument("--humidity", type=float, default=50.0,
-                        help="Relative humidity (%%)")
-    parser.add_argument("--pressure-pa", type=float, default=101325.0,
-                        help="Ambient pressure (Pa)")
-    parser.add_argument("--n-vel", type=int, default=20,
-                        help="Velocity grid count")
-    parser.add_argument("--n-cd", type=int, default=20,
-                        help="Cd grid count")
-    parser.add_argument("--output-py", default="coast_table.py",
-                        help="Output Python coast-table path")
-    parser.add_argument("--output-cpp", default="../include/coast_table.h",
-                        help="Output C++ header path")
-    parser.add_argument("--config-h", default="../include/config.h",
-                        help="Config header path to update")
-    args = parser.parse_args()
-
     here = Path(__file__).resolve().parent
-    out_py = (here / args.output_py).resolve()
-    out_cpp = (here / args.output_cpp).resolve()
-    config_h = (here / args.config_h).resolve()
+    out_py = (here / OUTPUT_PY).resolve()
+    out_cpp = (here / OUTPUT_CPP).resolve()
+    config_h = (here / CONFIG_H).resolve()
 
-    rho_air = compute_air_density(args.temp_f, args.humidity, args.pressure_pa)
+    rho_air = compute_air_density(TEMP_F, HUMIDITY_PCT, PRESSURE_HPA)
     print(
         f"Computed rho = {rho_air:.6f} kg/m^3 "
-        f"at {args.temp_f:.1f}F, {args.humidity:.1f}% RH, "
-        f"{args.pressure_pa:.0f} Pa"
+        f"at {TEMP_F:.1f}F, {HUMIDITY_PCT:.1f}% RH, "
+        f"{PRESSURE_HPA:.2f} hPa"
     )
 
     vel_range, cd_range, altitude_table = generate_coast_table(
-        mass_kg=args.mass_kg,
+        mass_kg=MASS_KG,
         rho_air=rho_air,
-        n_vel=args.n_vel,
-        n_cd=args.n_cd,
+        n_vel=N_VEL,
+        n_cd=N_CD,
+        vel_min=VEL_MIN,
+        vel_max=VEL_MAX,
+        cd_min=CD_MIN,
+        cd_max=CD_MAX,
     )
 
     save_coast_table_to_file(vel_range, cd_range, altitude_table, out_py)
     save_coast_table_to_cpp(vel_range, cd_range, altitude_table, out_cpp)
-    update_config_header(config_h, args.mass_kg, rho_air, args.temp_f,
-                         args.humidity)
+    update_config_header(config_h, MASS_KG, rho_air, TEMP_F,
+                         HUMIDITY_PCT)
 
     print("Done")
 
