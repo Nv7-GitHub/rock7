@@ -5,9 +5,9 @@ Creates a 2D matrix of remaining altitude based on initial velocity and Cd.
 import numpy as np
 
 # Constants from config.h
-MASS = 0.603  # kg
+MASS = 0.625  # kg
 AREA = (np.pi * (6.6 / 100.0) ** 2) / 4.0  # m^2
-RHO = 1.225  # kg/m^3
+RHO = 1.212  # kg/m^3
 G = 9.80665  # m/s^2
 
 # Simulation parameters
