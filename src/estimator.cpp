@@ -27,31 +27,26 @@ float gBias[3] = {0.0f, 0.0f, 0.0f};
 float hpBias = 0.0f;
 float aBias[3] = {0.0f, 0.0f, 0.0f};
 
+// Bias calibration should only adapt when the rocket is truly stationary.
+constexpr float BIAS_STATIONARY_ACCEL_TOL = 0.6f;  // m/s^2 around 1g
+constexpr float BIAS_STATIONARY_GYRO_MAX = 0.35f;  // rad/s
+constexpr int BIAS_STATIONARY_MIN_SAMPLES = 125;   // 250 ms at 500 Hz
+constexpr float BIAS_ALPHA_IMU = 0.01f;
+constexpr float BIAS_ALPHA_BARO = 0.10f;
+
 // Gyro bias handling, note: run hp.startConversion() before
 float BiasUpdate() {
   unsigned long start = micros();
   ReadIMU();
+
+  // Read gyro first for stationary detection.
   float g[3];
   mpu.getGyro(g[0], g[1], g[2]);
 
-  // Simple low-pass filter, use negative cuz we wanna subtract this later
-  float alpha = 0.01f;
-  gBias[0] = (1.0f - alpha) * gBias[0] - alpha * g[0];
-  gBias[1] = (1.0f - alpha) * gBias[1] - alpha * g[1];
-  gBias[2] = (1.0f - alpha) * gBias[2] - alpha * g[2];
+  float gMag;
+  vectorLength(&gMag, g);
 
-  // Barometer bias
-  if (hp.isConversionReady()) {
-    hp.readAllData();
-    if (fabsf(hpBias) < 0.01f) {
-      hpBias = hp.hp_sensorData.A;
-    } else {
-      hpBias = 0.9f * hpBias + 0.1f * hp.hp_sensorData.A;
-    }
-    hp.startConversion();
-  }
-
-  // Accel bias (Z only)
+  // Read accel and estimate stationarity from accel magnitude around 1g.
   float a[3];
   mpu.getAccel(a[0], a[1], a[2]);
   a[2] *= scale_aZ;  // Scale correction
@@ -59,16 +54,53 @@ float BiasUpdate() {
   float aMag;
   vectorLength(&aMag, a);
 
+  bool stationarySample = (fabsf(aMag - G) < BIAS_STATIONARY_ACCEL_TOL) &&
+                          (gMag < BIAS_STATIONARY_GYRO_MAX);
+
+  static int stationaryCount = 0;
+  if (stationarySample) {
+    if (stationaryCount < BIAS_STATIONARY_MIN_SAMPLES) {
+      stationaryCount++;
+    }
+  } else {
+    stationaryCount = 0;
+  }
+  bool stationary = stationaryCount >= BIAS_STATIONARY_MIN_SAMPLES;
+
+  // Learn gyro bias only when stationary.
+  if (stationary) {
+    gBias[0] = (1.0f - BIAS_ALPHA_IMU) * gBias[0] - BIAS_ALPHA_IMU * g[0];
+    gBias[1] = (1.0f - BIAS_ALPHA_IMU) * gBias[1] - BIAS_ALPHA_IMU * g[1];
+    gBias[2] = (1.0f - BIAS_ALPHA_IMU) * gBias[2] - BIAS_ALPHA_IMU * g[2];
+  }
+
+  // Barometer bias
+  if (hp.isConversionReady()) {
+    hp.readAllData();
+    if (stationary) {
+      if (fabsf(hpBias) < 0.01f) {
+        hpBias = hp.hp_sensorData.A;
+      } else {
+        hpBias = (1.0f - BIAS_ALPHA_BARO) * hpBias +
+                 BIAS_ALPHA_BARO * hp.hp_sensorData.A;
+      }
+    }
+    hp.startConversion();
+  }
+
   // Subtract gravity from accel vector, in direction of magnitude
   float accNorm[3];
   copyVector(accNorm, a);
   normalizeVector(accNorm);
   scaleVector(accNorm, G, accNorm);
   subtractVectors(a, a, accNorm);
-  // Also negative for same reason as gyro
-  aBias[0] = (1.0f - alpha) * aBias[0] - alpha * a[0];
-  aBias[1] = (1.0f - alpha) * aBias[1] - alpha * a[1];
-  aBias[2] = (1.0f - alpha) * aBias[2] - alpha * a[2];
+
+  // Learn accel bias only when stationary.
+  if (stationary) {
+    aBias[0] = (1.0f - BIAS_ALPHA_IMU) * aBias[0] - BIAS_ALPHA_IMU * a[0];
+    aBias[1] = (1.0f - BIAS_ALPHA_IMU) * aBias[1] - BIAS_ALPHA_IMU * a[1];
+    aBias[2] = (1.0f - BIAS_ALPHA_IMU) * aBias[2] - BIAS_ALPHA_IMU * a[2];
+  }
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
