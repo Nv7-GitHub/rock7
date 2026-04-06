@@ -53,7 +53,8 @@ CD_MAX = 4.0
 ALPHA_CD = 0.05  # Low-pass filter coefficient at 500 Hz
 CONTROL_VEL_START = 55.0  # m/s, velocity threshold for deploying airbrakes
 TARGET_ALTITUDE = 228.6  # m, target apogee altitude
-N_CD_SEARCH = 20  # number of Cd samples the flight computer evaluates
+TARGET_CD_MIN = float(CD_RANGE[0])
+TARGET_CD_MAX = float(CD_RANGE[-1])
 
 # Cd controller tuning (match firmware-style closed-loop Cd tracking)
 CD_CTRL_KP = 5.0  # position units per Cd error
@@ -221,26 +222,28 @@ def update_cd_estimate(cd_estimate, accel, vel):
     return cd_estimate
 
 
-def find_target_cd(pos, vel, cd_estimate):
-    """Find Cd that best hits target apogee using lookup-table search."""
-    # Predict apogee with current conditions
-    remaining_alt = get_remaining_altitude(vel, cd_estimate)
-    predicted_apogee = pos + remaining_alt
+def find_target_cd(pos, vel, _cd_estimate):
+    """Solve target Cd continuously using bisection on bilinear lookup table."""
+    pred_min = pos + get_remaining_altitude(vel, TARGET_CD_MIN)
+    pred_max = pos + get_remaining_altitude(vel, TARGET_CD_MAX)
 
-    best_cd = cd_estimate
-    min_error = abs(predicted_apogee - TARGET_ALTITUDE)
+    # Same saturation behavior as firmware logic.
+    if TARGET_ALTITUDE >= pred_min:
+        return TARGET_CD_MIN
+    if TARGET_ALTITUDE <= pred_max:
+        return TARGET_CD_MAX
 
-    cd_step = (CD_MAX - CD_MIN) / float(N_CD_SEARCH - 1)
-    for i in range(N_CD_SEARCH):
-        cd_test = CD_MIN + cd_step * float(i)
-        test_remaining = get_remaining_altitude(vel, cd_test)
-        test_apogee = pos + test_remaining
-        error = abs(test_apogee - TARGET_ALTITUDE)
-        if error < min_error:
-            min_error = error
-            best_cd = cd_test
+    lo = TARGET_CD_MIN
+    hi = TARGET_CD_MAX
+    for _ in range(14):
+        mid = 0.5 * (lo + hi)
+        pred = pos + get_remaining_altitude(vel, mid)
+        if pred > TARGET_ALTITUDE:
+            lo = mid
+        else:
+            hi = mid
 
-    return best_cd
+    return 0.5 * (lo + hi)
 
 
 def flight_computer(pos, vel, accel, cd_estimate, motor_position, cd_controller, dt):
