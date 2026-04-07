@@ -30,12 +30,10 @@ float aBias[3] = {0.0f, 0.0f, 0.0f};
 // PAD/bias UI state (managed here). `biasActive` reflects whether the
 // estimator considers the vehicle stationary enough to update biases.
 bool biasActive = true;
-float lastPadAccel = G;
 
 // Bias calibration should only adapt when the rocket is truly stationary.
 constexpr float BIAS_STATIONARY_ACCEL_TOL = 0.6f;  // m/s^2 around 1g
 constexpr float BIAS_STATIONARY_GYRO_MAX = 0.35f;  // rad/s
-constexpr int BIAS_STATIONARY_MIN_SAMPLES = 125;   // 250 ms at 500 Hz
 constexpr float BIAS_ALPHA_IMU = 0.01f;
 constexpr float BIAS_ALPHA_BARO = 0.10f;
 
@@ -61,16 +59,10 @@ float BiasUpdate() {
 
   bool stationarySample = (fabsf(aMag - G) < BIAS_STATIONARY_ACCEL_TOL) &&
                           (gMag < BIAS_STATIONARY_GYRO_MAX);
+  bool stationary = stationarySample;
 
-  static int stationaryCount = 0;
-  if (stationarySample) {
-    if (stationaryCount < BIAS_STATIONARY_MIN_SAMPLES) {
-      stationaryCount++;
-    }
-  } else {
-    stationaryCount = 0;
-  }
-  bool stationary = stationaryCount >= BIAS_STATIONARY_MIN_SAMPLES;
+  // Expose stationary state for PAD LED/UI.
+  biasActive = stationary;
 
   // Learn gyro bias only when stationary.
   if (stationary) {
@@ -106,12 +98,6 @@ float BiasUpdate() {
     aBias[1] = (1.0f - BIAS_ALPHA_IMU) * aBias[1] - BIAS_ALPHA_IMU * a[1];
     aBias[2] = (1.0f - BIAS_ALPHA_IMU) * aBias[2] - BIAS_ALPHA_IMU * a[2];
   }
-
-  // Update PAD UI state: store last accel magnitude and set biasActive
-  // equal to whether we consider the sensor stationary (so biasActive
-  // == stationary). The UI can derive "shaken" as !biasActive.
-  lastPadAccel = aMag;
-  biasActive = stationary;
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;

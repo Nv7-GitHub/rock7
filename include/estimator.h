@@ -19,7 +19,5 @@ extern float Cd;
 
 // PAD/bias UI state (managed by BiasUpdate)
 extern bool biasActive;
-extern float lastPadAccel;
-// Note: pad shake is derived as !biasActive
 
 #endif  // ESTIMATOR_H

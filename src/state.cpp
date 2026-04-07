@@ -16,22 +16,19 @@ Color codes:
 uint32_t lastNonIdleTime = 0;
 
 // Launch tracking in PAD: arm early and recover pre-roll dv before BOOST.
-constexpr uint32_t PAD_LAUNCH_WINDOW_MS = 120;
-constexpr uint32_t PAD_LAUNCH_CHECK_DELAY_MS = 20;
+constexpr uint32_t PAD_LAUNCH_WINDOW_MS = 100;
+constexpr uint32_t PAD_LAUNCH_CHECK_DELAY_MS = 50;
 constexpr float PAD_LAUNCH_ARM_ACCEL = 11.5f;  // accel magnitude (includes 1g)
-constexpr int PAD_LAUNCH_ARM_SAMPLES = 4;      // consecutive samples at 500 Hz
 constexpr int PAD_PREROLL_SAMPLES = 150;       // 0.30 s at 500 Hz
 constexpr float PAD_LOOP_DT = 1.0f / 500.0f;
 
 float padPrerollAccel[PAD_PREROLL_SAMPLES];
 int padPrerollHead = 0;
 int padPrerollCount = 0;
-int padLaunchConsecutive = 0;
 
 static void resetPadLaunchTracking() {
   padPrerollHead = 0;
   padPrerollCount = 0;
-  padLaunchConsecutive = 0;
   for (int i = 0; i < PAD_PREROLL_SAMPLES; ++i) {
     padPrerollAccel[i] = 0.0f;
   }
@@ -88,12 +85,9 @@ void stateUpdate() {
         prog = launchElapsed / (float)PAD_LAUNCH_WINDOW_MS;
         ledWrite(prog, 0.0, 0.0);
         debugPrintf("STATE: PAD (LAUNCH WINDOW)\n");
-        // Check for launch after brief settle. If accel pulse already decayed,
-        // allow velocity-only confirmation in later window half.
+        // Check for launch after brief settle
         if (launchElapsed > PAD_LAUNCH_CHECK_DELAY_MS) {
-          if (x[1] > LAUNCH_VEL &&
-              (rawSensorData[0] > LAUNCH_ACCEL ||
-               launchElapsed > (PAD_LAUNCH_WINDOW_MS / 2))) {
+          if (x[1] > LAUNCH_VEL && rawSensorData[0] > LAUNCH_ACCEL) {
             currentState = STATE_BOOST;
             resetPadLaunchTracking();
           }
@@ -207,21 +201,12 @@ void estimatorUpdate() {
       pushPadPreroll(acc);
 
       if (acc > PAD_LAUNCH_ARM_ACCEL) {
-        if (padLaunchConsecutive < PAD_LAUNCH_ARM_SAMPLES) {
-          padLaunchConsecutive++;
-        }
-      } else {
-        padLaunchConsecutive = 0;
-      }
-
-      if (padLaunchConsecutive >= PAD_LAUNCH_ARM_SAMPLES) {
         // Potential launch: start launch window and seed missing pre-roll dv.
         lastNonIdleTime = millis();
         FilterReset();
         float dv = computePadPrerollDv();
         x[1] += dv;
         debugPrintf("PAD preroll dv injected: %.4f m/s\n", dv);
-        padLaunchConsecutive = 0;
       }
       break;
     }
