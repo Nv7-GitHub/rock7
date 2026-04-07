@@ -3,7 +3,6 @@
 State currentState = STATE_IDLE;
 
 // Indicates whether bias calibration is currently active (for LED/debug)
-bool biasActive = false;
 /*
 Color codes:
   IDLE: Blue to Green over 10s
@@ -101,12 +100,12 @@ void stateUpdate() {
         }
         break;
       }
-      // Indicate bias calibration using LEDs when in PAD and not in launch
-      // window. Cyan-ish when calibrating, dim green otherwise.
-      if (biasActive) {
-        ledWrite(0.0, 0.5, 0.5);  // Calibrating (cyan)
+      // Indicate PAD state: blue when shaken (i.e. not stationary),
+      // dim green otherwise. (Keep biasActive == stationary.)
+      if (!biasActive) {
+        ledWrite(0.0, 0.0, 0.5);  // Shaken (blue)
       } else {
-        ledWrite(0.0, 0.1, 0.0);  // Dim green
+        ledWrite(0.0, 0.1, 0.0);  // Dim green (calibrating/idle)
       }
       debugPrintf("STATE: PAD\n");
       break;
@@ -203,10 +202,8 @@ void estimatorUpdate() {
       // Enable odrive
       EnableOdrv();
 
-      // Calibrate bias (mark active for LED indication)
-      biasActive = true;
+      // Calibrate bias (estimator updates PAD UI state internally)
       float acc = BiasUpdate();
-      biasActive = false;
       pushPadPreroll(acc);
 
       if (acc > PAD_LAUNCH_ARM_ACCEL) {

@@ -27,6 +27,11 @@ float gBias[3] = {0.0f, 0.0f, 0.0f};
 float hpBias = 0.0f;
 float aBias[3] = {0.0f, 0.0f, 0.0f};
 
+// PAD/bias UI state (managed here). `biasActive` reflects whether the
+// estimator considers the vehicle stationary enough to update biases.
+bool biasActive = true;
+float lastPadAccel = G;
+
 // Bias calibration should only adapt when the rocket is truly stationary.
 constexpr float BIAS_STATIONARY_ACCEL_TOL = 0.6f;  // m/s^2 around 1g
 constexpr float BIAS_STATIONARY_GYRO_MAX = 0.35f;  // rad/s
@@ -101,6 +106,12 @@ float BiasUpdate() {
     aBias[1] = (1.0f - BIAS_ALPHA_IMU) * aBias[1] - BIAS_ALPHA_IMU * a[1];
     aBias[2] = (1.0f - BIAS_ALPHA_IMU) * aBias[2] - BIAS_ALPHA_IMU * a[2];
   }
+
+  // Update PAD UI state: store last accel magnitude and set biasActive
+  // equal to whether we consider the sensor stationary (so biasActive
+  // == stationary). The UI can derive "shaken" as !biasActive.
+  lastPadAccel = aMag;
+  biasActive = stationary;
 
   // Delay to looprate
   unsigned long deltmicros = micros() - start;
