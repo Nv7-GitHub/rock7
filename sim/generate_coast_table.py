@@ -11,9 +11,9 @@ import numpy as np
 # User-editable configuration
 # -----------------------------------------------------------------------------
 MASS_KG = 0.625
-TEMP_F = 63.0
-HUMIDITY_PCT = 70.0
-PRESSURE_HPA = 1016.3
+TEMP_F = 61.0
+HUMIDITY_PCT = 61.0
+PRESSURE_HPA = 1015.0
 
 N_VEL = 20
 N_CD = 20
