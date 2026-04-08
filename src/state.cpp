@@ -94,6 +94,18 @@ void stateUpdate() {
         }
         break;
       }
+      // If ODrive heartbeat is stale, show a bright, noticeable LED
+      // indicator in PAD so the operator can see the fault immediately.
+      if (!odriveHeartbeatFresh()) {
+        // Flash bright magenta/red at ~2Hz to attract attention
+        if (((millis() / 250) & 1) == 0) {
+          ledWrite(1.0f, 0.0f, 0.5f);
+        } else {
+          ledWrite(1.0f, 0.0f, 0.0f);
+        }
+        debugPrintf("STATE: PAD - ODrive heartbeat stale\n");
+        break;
+      }
       // Indicate PAD state: blue when shaken (i.e. not stationary),
       // dim green otherwise. (Keep biasActive == stationary.)
       if (!biasActive) {
