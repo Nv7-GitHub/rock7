@@ -20,6 +20,7 @@ void setup() {
 
 void loop() {
   handleFlashCommands();
+  serviceOdrive();
 
   // Update state machine
   stateUpdate();

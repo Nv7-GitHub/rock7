@@ -17,19 +17,33 @@ static inline void canCallback(int packet_size) {
 
 float motorvel;
 float motorpos;
-float motorcurrent;
+float motorcurrent = 0.0f;
+float motor_cmd_pos = 0.0f;
+
+uint32_t axisError = 0;
+
+static uint32_t lastHeartbeatMs = 0;
+static uint32_t lastFeedbackMs = 0;
+static uint32_t lastEnableRequestMs = 0;
+
+static constexpr uint32_t HEARTBEAT_TIMEOUT_MS = 350;
+static constexpr uint32_t FEEDBACK_TIMEOUT_MS = 350;
+static constexpr uint32_t ENABLE_RETRY_MS = 100;
 
 void odriveFeedback(Get_Encoder_Estimates_msg_t& msg, void* user_data) {
   motorpos = msg.Pos_Estimate;
   motorvel = msg.Vel_Estimate;
+  lastFeedbackMs = millis();
 }
 
 void odriveCurrents(Get_Iq_msg_t& msg, void* user_data) {
-  motorcurrent = msg.Iq_Setpoint;  // or msg.Iq_Measured for actual current
+  motorcurrent = msg.Iq_Measured;
 }
 
 void odriveHeartbeat(Heartbeat_msg_t& msg, void* user_data) {
   lastHeartbeat = msg;
+  lastHeartbeatMs = millis();
+  axisError = msg.Axis_Error;
 }
 
 void ledWrite(float r, float g, float b) {
@@ -101,6 +115,12 @@ void setupHardware() {
 }
 
 void EnableOdrv() {
+  serviceOdrive();
+
+  if (!odriveHeartbeatFresh()) {
+    return;
+  }
+
   // Enable closed-loop
   if (lastHeartbeat.Axis_State ==
       ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
@@ -248,18 +268,42 @@ void EnableOdrv() {
   }
 }
 
-uint32_t axisError = 0;
+bool odriveHeartbeatFresh() {
+  return (millis() - lastHeartbeatMs) <= HEARTBEAT_TIMEOUT_MS;
+}
+
+void serviceOdrive() {
+  pumpEvents(CAN);
+
+  uint32_t nowMs = millis();
+  bool heartbeatFresh = (nowMs - lastHeartbeatMs) <= HEARTBEAT_TIMEOUT_MS;
+  bool feedbackFresh = (nowMs - lastFeedbackMs) <= FEEDBACK_TIMEOUT_MS;
+
+  // If heartbeat/feedback has gone stale or axis is not closed-loop,
+  // periodically request closed-loop mode again.
+  if (!heartbeatFresh || !feedbackFresh ||
+      lastHeartbeat.Axis_State !=
+          ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
+    if ((nowMs - lastEnableRequestMs) >= ENABLE_RETRY_MS) {
+      lastEnableRequestMs = nowMs;
+      odrv.clearErrors();
+      odrv.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    }
+  }
+}
 
 void odrvPosition(float pos) {
-  odrv.setPosition(pos);
-  if (lastHeartbeat.Axis_State !=
-      ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
-    if (lastHeartbeat.Axis_State == ODriveAxisState::AXIS_STATE_IDLE &&
-        lastHeartbeat.Axis_Error != 0) {
-      axisError = lastHeartbeat.Axis_Error;
-    }
-    odrv.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+  motor_cmd_pos = pos;
+  serviceOdrive();
 
+  if (!odriveHeartbeatFresh()) {
     return;
   }
+
+  if (lastHeartbeat.Axis_State !=
+      ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
+    return;
+  }
+
+  odrv.setPosition(pos);
 }

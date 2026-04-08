@@ -15,13 +15,13 @@ Simple flight data recording and download system for the Rock V7 flight computer
 
 ### On the Pico
 - Logs flight data at 100 Hz (every 10ms) to LittleFS filesystem
-- Stores data in **binary format** (64 bytes per record) for maximum efficiency
+- Stores data in **binary format** (68 bytes per record) for maximum efficiency
 - Creates sequential flight files: `flight_0.bin`, `flight_1.bin`, etc.
 - Each new power-up creates a new flight file (no overwriting)
-- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro, motor position/velocity, roll/pitch/yaw, drag coefficient, desired drag coefficient, motor current, state, ODrive axis errors
+- Data logged: timestamp, altitude, velocity, accel bias, raw accel, raw baro, motor position/velocity, commanded motor position, roll/pitch/yaw, drag coefficient, desired drag coefficient, motor current, state, ODrive axis errors
 
 ### Binary Format
-Each record is 64 bytes:
+Each record is 68 bytes:
 - `time_ms` (4 bytes, uint32)
 - `altitude_m` (4 bytes, float)
 - `velocity_ms` (4 bytes, float)
@@ -30,6 +30,7 @@ Each record is 64 bytes:
 - `raw_baro_m` (4 bytes, float)
 - `motor_pos` (4 bytes, float)
 - `motor_vel` (4 bytes, float)
+- `motor_cmd_pos` (4 bytes, float)
 - `roll_rad` (4 bytes, float)
 - `pitch_rad` (4 bytes, float)
 - `yaw_rad` (4 bytes, float)
@@ -39,12 +40,12 @@ Each record is 64 bytes:
 - `state` (4 bytes, uint32)
 - `axis_error` (4 bytes, uint32)
 
-**Storage Efficiency:** Binary is ~57% smaller than CSV (64 bytes vs 120-150 bytes per record)
+**Storage Efficiency:** Binary is ~55% smaller than CSV (68 bytes vs 120-150 bytes per record)
 
 ### CSV Output
 Python tool automatically converts binary to CSV with columns:
 ```
-time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,roll_rad,pitch_rad,yaw_rad,Cd,desired_Cd,motor_current_A,state,axis_error
+time_ms,altitude_m,velocity_ms,accel_bias_ms2,raw_accel_ms2,raw_baro_m,motor_pos,motor_vel,motor_cmd_pos,roll_rad,pitch_rad,yaw_rad,Cd,desired_Cd,motor_current_A,state,axis_error
 ```
 
 ## Usage
@@ -103,9 +104,9 @@ pip install pyserial
 ## Storage Capacity
 
 With ~15MB LittleFS and binary format:
-- At 100 Hz with 64 bytes/record = 6,400 bytes/sec
-- **~2,450 seconds = ~41 minutes per 15MB**
-- Each 10 minute flight = ~3.84 MB
+- At 100 Hz with 68 bytes/record = 6,800 bytes/sec
+- **~2,300 seconds = ~38 minutes per 15MB**
+- Each 10 minute flight = ~4.08 MB
 - **Can store ~3-4 full 10-minute flights**
 
 **~57% more efficient than CSV storage!**

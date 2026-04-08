@@ -33,11 +33,14 @@ extern ODriveCAN odrv;
 extern float motorvel;
 extern float motorpos;
 extern float motorcurrent;
+extern float motor_cmd_pos;
 extern uint32_t axisError;
 
 extern void ledWrite(float r, float g, float b);
 void setupHardware();
 void EnableOdrv();
 void odrvPosition(float pos);
+void serviceOdrive();
+bool odriveHeartbeatFresh();
 
 #endif  // HARDWARE_H
