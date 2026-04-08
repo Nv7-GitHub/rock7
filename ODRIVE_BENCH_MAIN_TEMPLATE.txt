@@ -1,0 +1,183 @@
+#include <Arduino.h>
+#include <Wire.h>
+
+#include "hardware.h"
+
+// Keep dual-core structure consistent with the flight firmware.
+semaphore_t setup_done;
+
+static String input_line = "";
+static float target_pos = 0.0f;
+static bool command_enabled = true;
+
+static bool parseFloatLine(const String& s, float* out) {
+  if (s.length() == 0) {
+    return false;
+  }
+
+  char buf[64];
+  size_t n = s.length();
+  if (n >= sizeof(buf)) {
+    n = sizeof(buf) - 1;
+  }
+  memcpy(buf, s.c_str(), n);
+  buf[n] = '\0';
+
+  char* endptr = nullptr;
+  float v = strtof(buf, &endptr);
+  if (endptr == buf || *endptr != '\0') {
+    return false;
+  }
+
+  *out = v;
+  return true;
+}
+
+static void printHelp() {
+  Serial.println("\nCommands:");
+  Serial.println("  <number>      Set target position (turns)");
+  Serial.println("  POS <number>  Set target position (turns)");
+  Serial.println("  ZERO          Set target to 0");
+  Serial.println("  HOLD          Stop sending position commands");
+  Serial.println("  RUN           Resume sending position commands");
+  Serial.println("  STATUS        Print one status line");
+  Serial.println("  HELP          Show this help");
+}
+
+static void printStatus() {
+  Serial.printf(
+      "status cmd=%.4f pos=%.4f vel=%.4f iq=%.4f hbFresh=%d axisError=%lu\n",
+      target_pos, motorpos, motorvel, motorcurrent,
+      odriveHeartbeatFresh() ? 1 : 0, (unsigned long)axisError);
+}
+
+static void handleLine(String line) {
+  line.trim();
+  if (line.length() == 0) {
+    return;
+  }
+
+  String upper = line;
+  upper.toUpperCase();
+
+  if (upper == "HELP") {
+    printHelp();
+    return;
+  }
+
+  if (upper == "ZERO") {
+    target_pos = 0.0f;
+    command_enabled = true;
+    Serial.println("target set to 0.0");
+    return;
+  }
+
+  if (upper == "HOLD") {
+    command_enabled = false;
+    Serial.println("command output disabled");
+    return;
+  }
+
+  if (upper == "RUN") {
+    command_enabled = true;
+    Serial.println("command output enabled");
+    return;
+  }
+
+  if (upper == "STATUS") {
+    printStatus();
+    return;
+  }
+
+  if (upper.startsWith("POS ")) {
+    String value = line.substring(4);
+    float v;
+    if (parseFloatLine(value, &v)) {
+      target_pos = v;
+      command_enabled = true;
+      Serial.printf("target set to %.4f\n", target_pos);
+    } else {
+      Serial.println("invalid POS value");
+    }
+    return;
+  }
+
+  float v;
+  if (parseFloatLine(line, &v)) {
+    target_pos = v;
+    command_enabled = true;
+    Serial.printf("target set to %.4f\n", target_pos);
+    return;
+  }
+
+  Serial.println("unknown command (type HELP)");
+}
+
+void setup() {
+  sem_init(&setup_done, 0, 1);
+
+  setupHardware();
+  hp.startConversion();
+
+  // Let users connect serial before prints.
+  delay(800);
+  Serial.println("\nODrive bench test mode");
+  printHelp();
+
+  sem_release(&setup_done);
+}
+
+void loop() {
+  // Keep the exact ODrive service path alive.
+  serviceOdrive();
+  EnableOdrv();
+
+  // Parse line-oriented serial commands.
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\r' || c == '\n') {
+      if (input_line.length() > 0) {
+        handleLine(input_line);
+        input_line = "";
+      }
+    } else if (c == 8 || c == 127) {
+      if (input_line.length() > 0) {
+        input_line.remove(input_line.length() - 1);
+      }
+    } else {
+      if (input_line.length() < 63) {
+        input_line += c;
+      }
+    }
+  }
+
+  if (command_enabled) {
+    odrvPosition(target_pos);
+  }
+
+  // 20 Hz status print.
+  static uint32_t lastPrintMs = 0;
+  uint32_t now = millis();
+  if (now - lastPrintMs >= 50) {
+    lastPrintMs = now;
+    printStatus();
+
+    // LED feedback:
+    // green = healthy heartbeat
+    // yellow = stale heartbeat but no axis error
+    // red = axis error
+    if (axisError != 0) {
+      ledWrite(0.2f, 0.0f, 0.0f);
+    } else if (!odriveHeartbeatFresh()) {
+      ledWrite(0.2f, 0.15f, 0.0f);
+    } else {
+      ledWrite(0.0f, 0.1f, 0.0f);
+    }
+  }
+}
+
+void setup1() { sem_acquire_blocking(&setup_done); }
+
+void loop1() {
+  // Unused in this bench program.
+}
