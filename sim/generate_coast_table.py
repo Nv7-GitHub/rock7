@@ -10,10 +10,10 @@ import numpy as np
 # -----------------------------------------------------------------------------
 # User-editable configuration
 # -----------------------------------------------------------------------------
-MASS_KG = 0.625
-TEMP_F = 61.0
-HUMIDITY_PCT = 61.0
-PRESSURE_HPA = 1015.0
+MASS_KG = 0.607
+TEMP_F = 55.0
+HUMIDITY_PCT = 49.0
+PRESSURE_HPA = 1020.0
 
 N_VEL = 20
 N_CD = 20
