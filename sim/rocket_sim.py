@@ -29,8 +29,8 @@ def get_remaining_altitude(velocity, cd):
     return alt_0 * (1 - cd_weight) + alt_1 * cd_weight
 
 # Constants from config.h
-MASS = 0.603  # kg
-BASE_CD = 0.44  # From OpenRocket
+MASS = 0.607  # kg
+BASE_CD = 0.75 # From OpenRocket
 AREA = (np.pi * (6.6 / 100.0) ** 2) / 4.0  # m^2
 RHO = 1.225  # kg/m^3
 G = 9.80665  # m/s^2
@@ -268,7 +268,7 @@ def flight_computer(pos, vel, accel, cd_estimate, motor_position, cd_controller,
 def run_simulation():
     """Run the rocket simulation."""
     # Load thrust curve
-    thrust_func = load_thrust_curve('AeroTech_F35W.csv')
+    thrust_func = load_thrust_curve('AeroTech_F67W.csv')
     
     # Initialize state
     t = 0.0
